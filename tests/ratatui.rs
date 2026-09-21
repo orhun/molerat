@@ -83,7 +83,7 @@ impl App {
                     ui.list_item(task.id, task.title)
                         .selected(index == self.selected)
                         .focused(index == self.selected)
-                        .on_action(Action::Click, move |_| Message::Select(index));
+                        .on_click(move || Message::Select(index));
                 }
             });
             ui.paragraph("details", self.tasks[self.selected].details)

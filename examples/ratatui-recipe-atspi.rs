@@ -1,6 +1,6 @@
 //! Ratatouille recipe tracker exposed to AT-SPI through Molerat.
 
-use molerat::{Molerat, accesskit::Action};
+use molerat::Molerat;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::{
@@ -74,8 +74,8 @@ impl App {
                         .description(*instructions)
                         .selected(index == self.selected)
                         .focused(index == self.selected)
-                        .on_action(Action::Focus, move |_| Message::Select(index))
-                        .on_action(Action::Click, move |_| Message::Select(index));
+                        .on_focus(move || Message::Select(index))
+                        .on_click(move || Message::Select(index));
                 }
             })
             .description("Use J or Down Arrow for the next step and K or Up Arrow for the previous step.");

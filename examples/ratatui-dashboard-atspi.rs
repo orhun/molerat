@@ -1,6 +1,6 @@
 //! System monitoring dashboard exposed to AT-SPI through Molerat.
 
-use molerat::{Molerat, accesskit::Action};
+use molerat::Molerat;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::{
@@ -229,8 +229,8 @@ impl App {
                         ))
                         .selected(index == self.selected_process)
                         .focused(index == self.selected_process)
-                        .on_action(Action::Focus, move |_| Message::SelectProcess(index))
-                        .on_action(Action::Click, move |_| Message::SelectProcess(index));
+                        .on_focus(move || Message::SelectProcess(index))
+                        .on_click(move || Message::SelectProcess(index));
                 }
             })
             .description(

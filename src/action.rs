@@ -159,6 +159,43 @@ mod tests {
     }
 
     #[test]
+    fn routes_common_actions_to_application_messages() {
+        #[derive(Debug, PartialEq, Eq)]
+        enum Message {
+            Click,
+            Focus,
+        }
+
+        let mut molerat = Molerat::<Message>::new("example");
+        molerat.publish(|ui| {
+            ui.button("select", "Select")
+                .on_click(|| Message::Click)
+                .on_focus(|| Message::Focus);
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        let (button_id, button) = &update.nodes[1];
+        assert!(button.supports_action(Action::Click));
+        assert!(button.supports_action(Action::Focus));
+        let button_id = *button_id;
+
+        for (action, expected) in [
+            (Action::Click, Message::Click),
+            (Action::Focus, Message::Focus),
+        ] {
+            assert!(molerat.handle_action(ActionRequest {
+                action,
+                target_tree: TreeId::ROOT,
+                target_node: button_id,
+                data: None,
+            }));
+            assert_eq!(molerat.messages().collect::<Vec<_>>(), [expected]);
+        }
+    }
+
+    #[test]
     fn publishes_and_routes_application_commands() {
         #[derive(Debug, PartialEq, Eq)]
         enum Message {

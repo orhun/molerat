@@ -172,15 +172,14 @@ impl<M> Molerat<M> {
     /// # Examples
     ///
     /// ```
-    /// use molerat::{Molerat, accesskit::Action};
-    /// # use molerat::accesskit::{ActionRequest, TreeId};
+    /// use molerat::Molerat;
+    /// # use molerat::accesskit::{Action, ActionRequest, TreeId};
     /// # #[derive(Debug, PartialEq)]
     /// # enum Message { Save }
     ///
     /// let mut molerat = Molerat::new("Editor");
     /// molerat.publish(|ui| {
-    ///     ui.button("save", "Save")
-    ///         .on_action(Action::Click, |_| Message::Save);
+    ///     ui.button("save", "Save").on_click(|| Message::Save);
     /// });
     /// # let Some(update) = molerat.last_update() else { return };
     /// # let request = ActionRequest {
@@ -212,14 +211,13 @@ impl<M> Molerat<M> {
     /// # Examples
     ///
     /// ```
-    /// # use molerat::{Molerat, accesskit::Action};
-    /// # use molerat::accesskit::{ActionRequest, TreeId};
+    /// # use molerat::Molerat;
+    /// # use molerat::accesskit::{Action, ActionRequest, TreeId};
     /// # #[derive(Debug, PartialEq)]
     /// # enum Message { Save }
     /// # let mut molerat = Molerat::new("Editor");
     /// # molerat.publish(|ui| {
-    /// #     ui.button("save", "Save")
-    /// #         .on_action(Action::Click, |_| Message::Save);
+    /// #     ui.button("save", "Save").on_click(|| Message::Save);
     /// # });
     /// # let Some(update) = molerat.last_update() else { return };
     /// # let request = ActionRequest {

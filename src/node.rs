@@ -229,6 +229,45 @@ impl<'a, M> Node<'a, M> {
         self
     }
 
+    /// Registers a click handler and maps it to an application message.
+    ///
+    /// This is a convenience wrapper around [`Node::on_action`] for [`Action::Click`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # enum Message { Save }
+    /// # let mut molerat = Molerat::<Message>::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.button("save", "Save").on_click(|| Message::Save);
+    /// # });
+    /// ```
+    pub fn on_click(self, handler: impl Fn() -> M + 'static) -> Self {
+        self.on_action(Action::Click, move |_| handler())
+    }
+
+    /// Registers a focus handler and maps it to an application message.
+    ///
+    /// This is a convenience wrapper around [`Node::on_action`] for [`Action::Focus`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # enum Message { SelectRecipe }
+    /// # let mut molerat = Molerat::<Message>::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.list_box("recipes", "Recipes", |ui| {
+    /// ui.list_box_option("ratatouille", "Ratatouille")
+    ///     .on_focus(|| Message::SelectRecipe);
+    /// # });
+    /// # });
+    /// ```
+    pub fn on_focus(self, handler: impl Fn() -> M + 'static) -> Self {
+        self.on_action(Action::Focus, move |_| handler())
+    }
+
     /// Registers an action supported by this node and maps it to an application message.
     ///
     /// # Examples
