@@ -1,6 +1,6 @@
 use molerat::{
     Molerat,
-    accesskit::{Node as AccessNode, NodeId, Role, TreeUpdate},
+    accesskit::{Action, ActionRequest, Node as AccessNode, NodeId, Role, TreeId, TreeUpdate},
 };
 use ratatui::{
     Frame, Terminal,
@@ -11,6 +11,11 @@ use ratatui::{
 use std::error::Error;
 
 type TestResult = Result<(), Box<dyn Error>>;
+
+#[derive(Debug, PartialEq, Eq)]
+enum Message {
+    Select(usize),
+}
 
 #[derive(Debug)]
 struct Task {
@@ -46,6 +51,13 @@ impl Default for App {
 }
 
 impl App {
+    /// Applies a message to the application state.
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::Select(index) => self.selected = index,
+        }
+    }
+
     /// Renders the application into a Ratatui frame.
     fn render(&self, frame: &mut Frame<'_>) {
         let [list_area, details_area] =
@@ -64,13 +76,14 @@ impl App {
     }
 
     /// Publishes the application state as a Molerat semantic tree.
-    fn publish(&self, molerat: &mut Molerat) {
+    fn publish(&self, molerat: &mut Molerat<Message>) {
         molerat.publish(|ui| {
             ui.list("tasks", "Tasks", |ui| {
                 for (index, task) in self.tasks.iter().enumerate() {
                     ui.list_item(task.id, task.title)
                         .selected(index == self.selected)
-                        .focused(index == self.selected);
+                        .focused(index == self.selected)
+                        .on_action(Action::Click, move |_| Message::Select(index));
                 }
             });
             ui.paragraph("details", self.tasks[self.selected].details)
@@ -80,7 +93,7 @@ impl App {
 }
 
 /// Returns the latest semantic tree published by the application.
-fn semantic_tree(molerat: &Molerat) -> &TreeUpdate {
+fn semantic_tree<M>(molerat: &Molerat<M>) -> &TreeUpdate {
     molerat
         .last_update()
         .unwrap_or_else(|| panic!("a semantic tree should have been published"))
@@ -100,7 +113,7 @@ fn node<'a>(update: &'a TreeUpdate, role: Role, label: &str) -> (NodeId, &'a Acc
 fn view_and_semantic_tree_describe_the_same_state() -> TestResult {
     let app = App::default();
     let mut terminal = Terminal::new(TestBackend::new(48, 10))?;
-    let mut molerat: Molerat = Molerat::new("tasks");
+    let mut molerat = Molerat::<Message>::new("tasks");
 
     terminal.draw(|frame| app.render(frame))?;
     app.publish(&mut molerat);
@@ -130,14 +143,23 @@ fn view_and_semantic_tree_describe_the_same_state() -> TestResult {
 fn state_changes_preserve_semantic_node_ids() -> TestResult {
     let mut app = App::default();
     let mut terminal = Terminal::new(TestBackend::new(48, 10))?;
-    let mut molerat: Molerat = Molerat::new("tasks");
+    let mut molerat = Molerat::<Message>::new("tasks");
 
     app.publish(&mut molerat);
     let initial = semantic_tree(&molerat);
     let (first_id, _) = node(initial, Role::ListItem, "First task");
     let (second_id, _) = node(initial, Role::ListItem, "Second task");
 
-    app.selected = 1;
+    assert!(molerat.handle_action(ActionRequest {
+        action: Action::Click,
+        target_tree: TreeId::ROOT,
+        target_node: second_id,
+        data: None,
+    }));
+    let Some(message) = molerat.messages().next() else {
+        panic!("clicking the second item should produce a message");
+    };
+    app.update(message);
     terminal.draw(|frame| app.render(frame))?;
     app.publish(&mut molerat);
 

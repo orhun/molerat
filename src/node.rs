@@ -1,24 +1,33 @@
-use accesskit::{Node as AccessNode, NodeId, Toggled};
+use crate::action::{ActionHandler, ActionHandlers};
+use accesskit::{Action, ActionRequest, Node as AccessNode, NodeId, Toggled};
 
 /// Configures a node added to a semantic tree.
 #[derive(Debug)]
-pub struct Node<'a> {
+pub struct Node<'a, M = ()> {
     /// The stable ID of the AccessKit node being configured.
     id: NodeId,
     /// The AccessKit node being configured.
     inner: &'a mut AccessNode,
     /// The node selected as semantic focus in the current publication.
     focus: &'a mut Option<NodeId>,
+    /// Application message handlers for actions supported by the node.
+    action_handlers: &'a mut ActionHandlers<M>,
 }
 
-impl<'a> Node<'a> {
+impl<'a, M> Node<'a, M> {
     /// Creates a semantic node builder for an AccessKit node.
     pub(crate) fn new(
         id: NodeId,
         inner: &'a mut AccessNode,
         focus: &'a mut Option<NodeId>,
+        action_handlers: &'a mut ActionHandlers<M>,
     ) -> Self {
-        Self { id, inner, focus }
+        Self {
+            id,
+            inner,
+            focus,
+            action_handlers,
+        }
     }
 
     /// Sets the node's accessible label.
@@ -101,6 +110,18 @@ impl<'a> Node<'a> {
     pub fn numeric_range(self, minimum: f64, maximum: f64) -> Self {
         self.inner.set_min_numeric_value(minimum);
         self.inner.set_max_numeric_value(maximum);
+        self
+    }
+
+    /// Registers an action supported by this node and maps it to an application message.
+    pub fn on_action(
+        self,
+        action: Action,
+        handler: impl Fn(&ActionRequest) -> M + 'static,
+    ) -> Self {
+        self.inner.add_action(action);
+        self.action_handlers
+            .insert((self.id, action), ActionHandler::new(handler));
         self
     }
 

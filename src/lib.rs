@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+mod action;
 mod node;
 mod ui;
 

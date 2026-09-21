@@ -1,6 +1,6 @@
-use crate::node::Node;
-use accesskit::{Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
-use std::{collections::HashMap, marker::PhantomData};
+use crate::{action::ActionHandlers, node::Node};
+use accesskit::{ActionRequest, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
+use std::collections::{HashMap, VecDeque};
 
 /// The node ID reserved for the application root.
 const ROOT_ID: NodeId = NodeId(0);
@@ -16,11 +16,10 @@ pub struct Molerat<M = ()> {
     node_ids: HashMap<Vec<String>, NodeId>,
     /// The next AccessKit node ID available for allocation.
     next_node_id: u64,
-    /// Records which message type this handle will emit.
-    ///
-    /// No message is stored yet. The `fn() -> M` marker means "produces `M`" without making the
-    /// handle behave as if it owns an `M`.
-    message: PhantomData<fn() -> M>,
+    /// Message handlers for the actions supported by the current tree.
+    action_handlers: ActionHandlers<M>,
+    /// Messages produced by handled action requests.
+    messages: VecDeque<M>,
 }
 
 impl<M> Molerat<M> {
@@ -31,7 +30,8 @@ impl<M> Molerat<M> {
             last_update: None,
             node_ids: HashMap::new(),
             next_node_id: ROOT_ID.0 + 1,
-            message: PhantomData,
+            action_handlers: HashMap::new(),
+            messages: VecDeque::new(),
         }
     }
 
@@ -42,6 +42,7 @@ impl<M> Molerat<M> {
 
     /// Publishes an AccessKit tree update.
     pub fn update(&mut self, update: TreeUpdate) {
+        self.action_handlers.clear();
         self.last_update = Some(update);
     }
 
@@ -52,10 +53,38 @@ impl<M> Molerat<M> {
 
     /// Builds and publishes a complete semantic tree.
     pub fn publish(&mut self, build: impl FnOnce(&mut Ui<'_, M>)) {
-        let mut ui = Ui::new(&self.name, &mut self.node_ids, &mut self.next_node_id);
+        let mut action_handlers = HashMap::new();
+        let mut ui = Ui::new(
+            &self.name,
+            &mut self.node_ids,
+            &mut self.next_node_id,
+            &mut action_handlers,
+        );
         build(&mut ui);
         let update = ui.finish();
-        self.update(update);
+        self.action_handlers = action_handlers;
+        self.last_update = Some(update);
+    }
+
+    /// Handles an AccessKit action request and queues its application message.
+    pub fn handle_action(&mut self, request: ActionRequest) -> bool {
+        if request.target_tree != TreeId::ROOT {
+            return false;
+        }
+
+        let Some(handler) = self
+            .action_handlers
+            .get(&(request.target_node, request.action))
+        else {
+            return false;
+        };
+        self.messages.push_back(handler.call(&request));
+        true
+    }
+
+    /// Drains the application messages produced by handled action requests.
+    pub fn messages(&mut self) -> impl Iterator<Item = M> + '_ {
+        self.messages.drain(..)
     }
 }
 
@@ -78,8 +107,8 @@ pub struct Ui<'a, M = ()> {
     path: Vec<String>,
     /// The node selected as semantic focus in this publication.
     focus: Option<NodeId>,
-    /// Associates the builder with the application's message type.
-    message: PhantomData<fn() -> M>,
+    /// Message handlers for actions supported by nodes in this publication.
+    action_handlers: &'a mut ActionHandlers<M>,
 }
 
 impl<'a, M> Ui<'a, M> {
@@ -88,6 +117,7 @@ impl<'a, M> Ui<'a, M> {
         application_name: &'a str,
         node_ids: &'a mut HashMap<Vec<String>, NodeId>,
         next_node_id: &'a mut u64,
+        action_handlers: &'a mut ActionHandlers<M>,
     ) -> Self {
         Self {
             application_name,
@@ -98,12 +128,12 @@ impl<'a, M> Ui<'a, M> {
             parent_nodes: Vec::new(),
             path: Vec::new(),
             focus: None,
-            message: PhantomData,
+            action_handlers,
         }
     }
 
     /// Adds a semantic node with the given AccessKit role.
-    pub fn node(&mut self, key: impl Into<String>, role: Role) -> Node<'_> {
+    pub fn node(&mut self, key: impl Into<String>, role: Role) -> Node<'_, M> {
         let node_index = self.add_node(key, role);
 
         self.node_builder(node_index)
@@ -115,7 +145,7 @@ impl<'a, M> Ui<'a, M> {
         key: impl Into<String>,
         role: Role,
         children: impl FnOnce(&mut Self),
-    ) -> Node<'_> {
+    ) -> Node<'_, M> {
         let key = key.into();
         let node_index = self.add_node(key.clone(), role);
         let parent_depth = self.parent_nodes.len();
@@ -136,7 +166,7 @@ impl<'a, M> Ui<'a, M> {
         key: impl Into<String>,
         label: impl Into<String>,
         children: impl FnOnce(&mut Self),
-    ) -> Node<'_> {
+    ) -> Node<'_, M> {
         self.container(key, Role::Group, children).label(label)
     }
 
@@ -146,27 +176,27 @@ impl<'a, M> Ui<'a, M> {
         key: impl Into<String>,
         label: impl Into<String>,
         children: impl FnOnce(&mut Self),
-    ) -> Node<'_> {
+    ) -> Node<'_, M> {
         self.container(key, Role::List, children).label(label)
     }
 
     /// Adds a list item with an accessible label.
-    pub fn list_item(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_> {
+    pub fn list_item(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::ListItem).label(label)
     }
 
     /// Adds a paragraph containing `text`.
-    pub fn paragraph(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_> {
+    pub fn paragraph(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::Paragraph).value(text)
     }
 
     /// Adds a static text node.
-    pub fn text(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_> {
+    pub fn text(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::Label).value(text)
     }
 
     /// Adds a button with an accessible label.
-    pub fn button(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_> {
+    pub fn button(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::Button).label(label)
     }
 
@@ -176,7 +206,7 @@ impl<'a, M> Ui<'a, M> {
         key: impl Into<String>,
         label: impl Into<String>,
         value: impl Into<String>,
-    ) -> Node<'_> {
+    ) -> Node<'_, M> {
         self.node(key, Role::TextInput).label(label).value(value)
     }
 
@@ -186,7 +216,7 @@ impl<'a, M> Ui<'a, M> {
         key: impl Into<String>,
         label: impl Into<String>,
         checked: bool,
-    ) -> Node<'_> {
+    ) -> Node<'_, M> {
         self.node(key, Role::CheckBox).label(label).toggled(checked)
     }
 
@@ -198,7 +228,7 @@ impl<'a, M> Ui<'a, M> {
         value: f64,
         minimum: f64,
         maximum: f64,
-    ) -> Node<'_> {
+    ) -> Node<'_, M> {
         self.node(key, Role::ProgressIndicator)
             .label(label)
             .numeric_range(minimum, maximum)
@@ -235,10 +265,11 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Returns a configurable node builder for the node at `node_index`.
-    fn node_builder(&mut self, node_index: usize) -> Node<'_> {
-        let (nodes, focus) = (&mut self.nodes, &mut self.focus);
+    fn node_builder(&mut self, node_index: usize) -> Node<'_, M> {
+        let (nodes, focus, action_handlers) =
+            (&mut self.nodes, &mut self.focus, &mut self.action_handlers);
         let id = nodes[node_index].0;
-        Node::new(id, &mut nodes[node_index].1, focus)
+        Node::new(id, &mut nodes[node_index].1, focus, action_handlers)
     }
 
     /// Finishes the builder and returns the complete AccessKit tree update.
