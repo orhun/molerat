@@ -3,7 +3,10 @@
 use molerat::{Molerat, accesskit::Action};
 use ratatui::{
     DefaultTerminal, Frame,
-    crossterm::event::{self, KeyCode},
+    crossterm::{
+        event::{self, DisableFocusChange, EnableFocusChange, Event, KeyCode},
+        execute,
+    },
     layout::{Constraint, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
@@ -152,17 +155,20 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
     loop {
         terminal.draw(|frame| app.render(frame))?;
 
-        if event::poll(Duration::from_millis(100))?
-            && let Some(key) = event::read()?.as_key_press_event()
-        {
-            match key.code {
-                KeyCode::Char('j') | KeyCode::Down => {
-                    app.selected = (app.selected + 1) % STEPS.len();
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    app.selected = app.selected.checked_sub(1).unwrap_or(STEPS.len() - 1);
-                }
-                KeyCode::Char('q') | KeyCode::Esc => break,
+        if event::poll(Duration::from_millis(100))? {
+            match event::read()? {
+                Event::Key(key) if key.is_press() => match key.code {
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        app.selected = (app.selected + 1) % STEPS.len();
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        app.selected = app.selected.checked_sub(1).unwrap_or(STEPS.len() - 1);
+                    }
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    _ => {}
+                },
+                Event::FocusGained => molerat.set_window_focused(true),
+                Event::FocusLost => molerat.set_window_focused(false),
                 _ => {}
             }
         }
@@ -177,5 +183,8 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    ratatui::run(run)
+    execute!(io::stdout(), EnableFocusChange)?;
+    let result = ratatui::run(run);
+    execute!(io::stdout(), DisableFocusChange)?;
+    result
 }

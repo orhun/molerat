@@ -52,6 +52,11 @@ impl Atspi {
         self.adapter.update_if_active(|| update.clone());
     }
 
+    /// Updates whether the application window is focused.
+    pub(crate) fn set_window_focused(&mut self, focused: bool) {
+        self.adapter.update_window_focus_state(focused);
+    }
+
     /// Drains action requests received on the adapter thread.
     pub(crate) fn drain_actions(&self) -> Vec<ActionRequest> {
         self.action_requests.try_iter().collect()

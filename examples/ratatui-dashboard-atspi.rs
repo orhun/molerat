@@ -3,7 +3,10 @@
 use molerat::{Molerat, accesskit::Action};
 use ratatui::{
     DefaultTerminal, Frame,
-    crossterm::event::{self, KeyCode},
+    crossterm::{
+        event::{self, DisableFocusChange, EnableFocusChange, Event, KeyCode},
+        execute,
+    },
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Line,
@@ -166,7 +169,7 @@ impl App {
             ui.group("host", "Host summary", |ui| {
                 ui.text("operating-system", "Operating system: Arch Linux");
                 ui.text("uptime", "Uptime: 8 days, 4 hours, 17 minutes");
-                ui.text(
+                ui.status(
                     "update-status",
                     if self.paused {
                         "Metric updates are paused"
@@ -457,21 +460,24 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
     loop {
         terminal.draw(|frame| app.render(frame))?;
 
-        if event::poll(Duration::from_millis(100))?
-            && let Some(key) = event::read()?.as_key_press_event()
-        {
-            match key.code {
-                KeyCode::Char('j') | KeyCode::Down => {
-                    app.selected_process = (app.selected_process + 1) % PROCESSES.len();
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    app.selected_process = app
-                        .selected_process
-                        .checked_sub(1)
-                        .unwrap_or(PROCESSES.len() - 1);
-                }
-                KeyCode::Char(' ') => app.paused = !app.paused,
-                KeyCode::Char('q') | KeyCode::Esc => break,
+        if event::poll(Duration::from_millis(100))? {
+            match event::read()? {
+                Event::Key(key) if key.is_press() => match key.code {
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        app.selected_process = (app.selected_process + 1) % PROCESSES.len();
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        app.selected_process = app
+                            .selected_process
+                            .checked_sub(1)
+                            .unwrap_or(PROCESSES.len() - 1);
+                    }
+                    KeyCode::Char(' ') => app.paused = !app.paused,
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    _ => {}
+                },
+                Event::FocusGained => molerat.set_window_focused(true),
+                Event::FocusLost => molerat.set_window_focused(false),
                 _ => {}
             }
         }
@@ -491,5 +497,8 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    ratatui::run(run)
+    execute!(io::stdout(), EnableFocusChange)?;
+    let result = ratatui::run(run);
+    execute!(io::stdout(), DisableFocusChange)?;
+    result
 }

@@ -1,7 +1,9 @@
 #[cfg(feature = "atspi")]
 use crate::atspi::Atspi;
 use crate::{action::Actions, node::Node};
-use accesskit::{ActionRequest, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
+use accesskit::{
+    ActionRequest, Live, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate,
+};
 use std::collections::{HashMap, VecDeque};
 
 /// The node ID reserved for the application root.
@@ -65,6 +67,25 @@ impl<M> Molerat<M> {
         let mut molerat = Self::new(name);
         molerat.atspi = Some(Atspi::new(None));
         molerat
+    }
+
+    /// Updates whether the AT-SPI application window is focused.
+    ///
+    /// This has no effect on handles created with [`Molerat::new`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use molerat::Molerat;
+    ///
+    /// let mut molerat = Molerat::<()>::new_atspi("Tasks");
+    /// molerat.set_window_focused(false);
+    /// ```
+    #[cfg(feature = "atspi")]
+    pub fn set_window_focused(&mut self, focused: bool) {
+        if let Some(atspi) = &mut self.atspi {
+            atspi.set_window_focused(focused);
+        }
     }
 
     /// Returns the application name exposed to consumers.
@@ -636,6 +657,44 @@ impl<'a, M> Ui<'a, M> {
     /// ```
     pub fn text(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::Label).value(text)
+    }
+
+    /// Adds a polite live status message.
+    ///
+    /// Changes are announced without interrupting the current screen-reader output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.status("updates", "Metric updates paused");
+    /// # });
+    /// ```
+    pub fn status(&mut self, key: impl Into<String>, message: impl Into<String>) -> Node<'_, M> {
+        self.node(key, Role::Status)
+            .label(message)
+            .with_accesskit(|node| node.set_live(Live::Polite))
+    }
+
+    /// Adds an assertive live alert message.
+    ///
+    /// Use this only for urgent information that should interrupt the current screen-reader output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.alert("temperature", "CPU temperature is critically high");
+    /// # });
+    /// ```
+    pub fn alert(&mut self, key: impl Into<String>, message: impl Into<String>) -> Node<'_, M> {
+        self.node(key, Role::Alert)
+            .label(message)
+            .with_accesskit(|node| node.set_live(Live::Assertive))
     }
 
     /// Adds a button with an accessible label.

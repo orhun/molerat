@@ -374,6 +374,31 @@ mod tests {
     }
 
     #[test]
+    fn publishes_live_status_and_alert_messages() {
+        use accesskit::Live;
+
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.status("status", "Build complete");
+            ui.alert("temperature", "CPU temperature is critically high");
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        let status = &update.nodes[1].1;
+        let alert = &update.nodes[2].1;
+
+        assert_eq!(status.role(), Role::Status);
+        assert_eq!(status.label(), Some("Build complete"));
+        assert_eq!(status.live(), Some(Live::Polite));
+        assert_eq!(alert.role(), Role::Alert);
+        assert_eq!(alert.label(), Some("CPU temperature is critically high"));
+        assert_eq!(alert.live(), Some(Live::Assertive));
+    }
+
+    #[test]
     fn publishes_a_nested_list() {
         let mut molerat: Molerat = Molerat::new("example");
 
