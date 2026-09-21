@@ -1,5 +1,5 @@
-use crate::node::Paragraph;
-use accesskit::{Node, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
+use crate::node::Node;
+use accesskit::{Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
 use std::{collections::HashMap, marker::PhantomData};
 
 /// The node ID reserved for the application root.
@@ -69,7 +69,7 @@ pub struct Ui<'a, M = ()> {
     /// The next AccessKit node ID available for allocation.
     next_node_id: &'a mut u64,
     /// Nodes added during this publication.
-    nodes: Vec<(NodeId, Node)>,
+    nodes: Vec<(NodeId, AccessNode)>,
     /// Direct children of the application root.
     root_children: Vec<NodeId>,
     /// Associates the builder with the application's message type.
@@ -93,17 +93,66 @@ impl<'a, M> Ui<'a, M> {
         }
     }
 
-    /// Adds a paragraph containing `text` as a child of the application root.
-    pub fn paragraph(&mut self, key: impl Into<String>, text: impl Into<String>) -> Paragraph<'_> {
+    /// Adds a semantic node with the given AccessKit role.
+    pub fn node(&mut self, key: impl Into<String>, role: Role) -> Node<'_> {
         let id = self.node_id(key);
-        let mut node = Node::new(Role::Paragraph);
-        node.set_value(text);
+        let node = AccessNode::new(role);
 
         self.root_children.push(id);
         self.nodes.push((id, node));
         let node_index = self.nodes.len() - 1;
 
-        Paragraph::new(&mut self.nodes[node_index].1)
+        Node::new(&mut self.nodes[node_index].1)
+    }
+
+    /// Adds a paragraph containing `text`.
+    pub fn paragraph(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_> {
+        self.node(key, Role::Paragraph).value(text)
+    }
+
+    /// Adds a static text node.
+    pub fn text(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_> {
+        self.node(key, Role::Label).value(text)
+    }
+
+    /// Adds a button with an accessible label.
+    pub fn button(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_> {
+        self.node(key, Role::Button).label(label)
+    }
+
+    /// Adds a text input with a label and current value.
+    pub fn text_input(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Node<'_> {
+        self.node(key, Role::TextInput).label(label).value(value)
+    }
+
+    /// Adds a checkbox with a label and checked state.
+    pub fn checkbox(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        checked: bool,
+    ) -> Node<'_> {
+        self.node(key, Role::CheckBox).label(label).toggled(checked)
+    }
+
+    /// Adds a progress indicator with a label and numeric range.
+    pub fn progress(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        value: f64,
+        minimum: f64,
+        maximum: f64,
+    ) -> Node<'_> {
+        self.node(key, Role::ProgressIndicator)
+            .label(label)
+            .numeric_range(minimum, maximum)
+            .numeric_value(value)
     }
 
     /// Returns the stable node ID associated with `key`, allocating it if necessary.
@@ -121,7 +170,7 @@ impl<'a, M> Ui<'a, M> {
 
     /// Finishes the builder and returns the complete AccessKit tree update.
     fn finish(mut self) -> TreeUpdate {
-        let mut root = Node::new(Role::Application);
+        let mut root = AccessNode::new(Role::Application);
         root.set_label(self.application_name);
         root.set_children(self.root_children);
         self.nodes.insert(0, (ROOT_ID, root));
@@ -159,7 +208,7 @@ mod tests {
     fn retains_the_latest_accesskit_update() {
         let root = NodeId(0);
         let update = TreeUpdate {
-            nodes: vec![(root, Node::new(Role::Application))],
+            nodes: vec![(root, AccessNode::new(Role::Application))],
             tree: Some(TreeInfo::new(root)),
             tree_id: TreeId::ROOT,
             focus: root,

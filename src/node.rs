@@ -1,21 +1,58 @@
-use accesskit::Node;
+use accesskit::{Node as AccessNode, Toggled};
 
-/// Configures a paragraph added to a semantic tree.
+/// Configures a node added to a semantic tree.
 #[derive(Debug)]
-pub struct Paragraph<'a> {
+pub struct Node<'a> {
     /// The AccessKit node being configured.
-    node: &'a mut Node,
+    inner: &'a mut AccessNode,
 }
 
-impl<'a> Paragraph<'a> {
-    /// Creates a paragraph builder for an AccessKit node.
-    pub(crate) fn new(node: &'a mut Node) -> Self {
-        Self { node }
+impl<'a> Node<'a> {
+    /// Creates a semantic node builder for an AccessKit node.
+    pub(crate) fn new(inner: &'a mut AccessNode) -> Self {
+        Self { inner }
     }
 
-    /// Sets the paragraph's accessible label.
+    /// Sets the node's accessible label.
     pub fn label(self, label: impl Into<String>) -> Self {
-        self.node.set_label(label);
+        self.inner.set_label(label);
+        self
+    }
+
+    /// Sets the node's value.
+    pub fn value(self, value: impl Into<String>) -> Self {
+        self.inner.set_value(value);
+        self
+    }
+
+    /// Sets the node's accessible description.
+    pub fn description(self, description: impl Into<String>) -> Self {
+        self.inner.set_description(description);
+        self
+    }
+
+    /// Sets whether the node is toggled.
+    pub fn toggled(self, toggled: bool) -> Self {
+        self.inner.set_toggled(Toggled::from(toggled));
+        self
+    }
+
+    /// Sets the node's current numeric value.
+    pub fn numeric_value(self, value: f64) -> Self {
+        self.inner.set_numeric_value(value);
+        self
+    }
+
+    /// Sets the minimum and maximum numeric values for the node.
+    pub fn numeric_range(self, minimum: f64, maximum: f64) -> Self {
+        self.inner.set_min_numeric_value(minimum);
+        self.inner.set_max_numeric_value(maximum);
+        self
+    }
+
+    /// Applies raw AccessKit configuration to the node.
+    pub fn with_accesskit(self, configure: impl FnOnce(&mut AccessNode)) -> Self {
+        configure(self.inner);
         self
     }
 }
@@ -23,17 +60,19 @@ impl<'a> Paragraph<'a> {
 #[cfg(test)]
 mod tests {
     use crate::Molerat;
-    use accesskit::{NodeId, Role, TreeId, TreeInfo};
+    use accesskit::{NodeId, Role, Toggled, TreeId, TreeInfo};
 
     const ROOT_ID: NodeId = NodeId(0);
 
     #[test]
-    fn publishes_a_labelled_paragraph() {
+    fn publishes_a_generic_node() {
         let mut molerat: Molerat = Molerat::new("example");
 
         molerat.publish(|ui| {
-            ui.paragraph("details", "Three tasks are overdue")
-                .label("Details");
+            ui.node("details", Role::Paragraph)
+                .label("Details")
+                .value("Three tasks are overdue")
+                .description("Task summary");
         });
 
         let Some(update) = molerat.last_update() else {
@@ -53,5 +92,39 @@ mod tests {
         assert_eq!(paragraph.role(), Role::Paragraph);
         assert_eq!(paragraph.label(), Some("Details"));
         assert_eq!(paragraph.value(), Some("Three tasks are overdue"));
+        assert_eq!(paragraph.description(), Some("Task summary"));
+    }
+
+    #[test]
+    fn publishes_leaf_components() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.paragraph("details", "Details");
+            ui.text("status", "Ready");
+            ui.button("save", "Save");
+            ui.text_input("search", "Search", "molerat");
+            ui.checkbox("enabled", "Enabled", true);
+            ui.progress("download", "Download", 42.0, 0.0, 100.0);
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        assert_eq!(update.nodes[1].1.role(), Role::Paragraph);
+        assert_eq!(update.nodes[1].1.value(), Some("Details"));
+        assert_eq!(update.nodes[2].1.role(), Role::Label);
+        assert_eq!(update.nodes[2].1.value(), Some("Ready"));
+        assert_eq!(update.nodes[3].1.role(), Role::Button);
+        assert_eq!(update.nodes[3].1.label(), Some("Save"));
+        assert_eq!(update.nodes[4].1.role(), Role::TextInput);
+        assert_eq!(update.nodes[4].1.label(), Some("Search"));
+        assert_eq!(update.nodes[4].1.value(), Some("molerat"));
+        assert_eq!(update.nodes[5].1.role(), Role::CheckBox);
+        assert_eq!(update.nodes[5].1.toggled(), Some(Toggled::True));
+        assert_eq!(update.nodes[6].1.role(), Role::ProgressIndicator);
+        assert_eq!(update.nodes[6].1.numeric_value(), Some(42.0));
+        assert_eq!(update.nodes[6].1.min_numeric_value(), Some(0.0));
+        assert_eq!(update.nodes[6].1.max_numeric_value(), Some(100.0));
     }
 }

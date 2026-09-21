@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-
 #![deny(clippy::unwrap_used)]
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
@@ -16,5 +15,5 @@ mod mcp;
 /// convenience.
 pub use accesskit;
 
-pub use node::Paragraph;
+pub use node::Node;
 pub use ui::{Molerat, Ui};
