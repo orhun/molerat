@@ -159,6 +159,37 @@ mod tests {
     }
 
     #[test]
+    fn publishes_and_routes_application_commands() {
+        #[derive(Debug, PartialEq, Eq)]
+        enum Message {
+            Refresh,
+        }
+
+        let mut molerat = Molerat::<Message>::new("example");
+        molerat.publish(|ui| {
+            ui.command("refresh", "Refresh application", || Message::Refresh);
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        let (root_id, root) = &update.nodes[0];
+        let [refresh] = root.custom_actions() else {
+            panic!("the application root should advertise the refresh command");
+        };
+        assert_eq!(refresh.description, "Refresh application");
+        let request = ActionRequest {
+            action: Action::CustomAction,
+            target_tree: TreeId::ROOT,
+            target_node: *root_id,
+            data: Some(ActionData::CustomAction(refresh.id)),
+        };
+
+        assert!(molerat.handle_action(request));
+        assert_eq!(molerat.messages().collect::<Vec<_>>(), [Message::Refresh]);
+    }
+
+    #[test]
     fn publishes_and_routes_multiple_custom_actions() {
         #[derive(Debug, PartialEq, Eq)]
         enum Message {

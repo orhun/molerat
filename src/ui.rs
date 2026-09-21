@@ -131,6 +131,20 @@ impl<'a, M> Ui<'a, M> {
         self.node_builder(node_index)
     }
 
+    /// Registers an application-wide command on the semantic root node.
+    ///
+    /// This is a convenience wrapper around [`Node::custom_action`] that uses the application root
+    /// as the action target.
+    pub fn command(
+        &mut self,
+        key: impl Into<String>,
+        description: impl Into<String>,
+        handler: impl Fn() -> M + 'static,
+    ) {
+        self.node_builder(0)
+            .custom_action(key, description, handler);
+    }
+
     /// Adds a semantic container and builds its children.
     pub fn container(
         &mut self,
