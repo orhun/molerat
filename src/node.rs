@@ -127,4 +127,40 @@ mod tests {
         assert_eq!(update.nodes[6].1.min_numeric_value(), Some(0.0));
         assert_eq!(update.nodes[6].1.max_numeric_value(), Some(100.0));
     }
+
+    #[test]
+    fn publishes_a_nested_list() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.group("main", "Main", |ui| {
+                ui.list("tasks", "Tasks", |ui| {
+                    ui.list_item("first", "First task");
+                    ui.list_item("second", "Second task");
+                });
+            });
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        let (root_id, root) = &update.nodes[0];
+        let (group_id, group) = &update.nodes[1];
+        let (list_id, list) = &update.nodes[2];
+        let (first_id, first) = &update.nodes[3];
+        let (second_id, second) = &update.nodes[4];
+
+        assert_eq!(*root_id, ROOT_ID);
+        assert_eq!(root.children(), [*group_id]);
+        assert_eq!(group.role(), Role::Group);
+        assert_eq!(group.label(), Some("Main"));
+        assert_eq!(group.children(), [*list_id]);
+        assert_eq!(list.role(), Role::List);
+        assert_eq!(list.label(), Some("Tasks"));
+        assert_eq!(list.children(), [*first_id, *second_id]);
+        assert_eq!(first.role(), Role::ListItem);
+        assert_eq!(first.label(), Some("First task"));
+        assert_eq!(second.role(), Role::ListItem);
+        assert_eq!(second.label(), Some("Second task"));
+    }
 }

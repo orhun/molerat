@@ -12,8 +12,8 @@ pub struct Molerat<M = ()> {
     name: String,
     /// The most recent semantic-tree update published by the application.
     last_update: Option<TreeUpdate>,
-    /// Stable AccessKit node IDs indexed by application-provided keys.
-    node_ids: HashMap<String, NodeId>,
+    /// Stable AccessKit node IDs indexed by hierarchical application-provided keys.
+    node_ids: HashMap<Vec<String>, NodeId>,
     /// The next AccessKit node ID available for allocation.
     next_node_id: u64,
     /// Records which message type this handle will emit.
@@ -64,14 +64,18 @@ impl<M> Molerat<M> {
 pub struct Ui<'a, M = ()> {
     /// The application name used to label the root node.
     application_name: &'a str,
-    /// Stable AccessKit node IDs indexed by application-provided keys.
-    node_ids: &'a mut HashMap<String, NodeId>,
+    /// Stable AccessKit node IDs indexed by hierarchical application-provided keys.
+    node_ids: &'a mut HashMap<Vec<String>, NodeId>,
     /// The next AccessKit node ID available for allocation.
     next_node_id: &'a mut u64,
     /// Nodes added during this publication.
     nodes: Vec<(NodeId, AccessNode)>,
     /// Direct children of the application root.
     root_children: Vec<NodeId>,
+    /// Indices of the containers that currently receive child nodes.
+    parent_nodes: Vec<usize>,
+    /// Key segments identifying the current container path.
+    path: Vec<String>,
     /// Associates the builder with the application's message type.
     message: PhantomData<fn() -> M>,
 }
@@ -80,7 +84,7 @@ impl<'a, M> Ui<'a, M> {
     /// Creates a semantic-tree builder using the handle's persistent ID state.
     fn new(
         application_name: &'a str,
-        node_ids: &'a mut HashMap<String, NodeId>,
+        node_ids: &'a mut HashMap<Vec<String>, NodeId>,
         next_node_id: &'a mut u64,
     ) -> Self {
         Self {
@@ -89,20 +93,63 @@ impl<'a, M> Ui<'a, M> {
             next_node_id,
             nodes: Vec::new(),
             root_children: Vec::new(),
+            parent_nodes: Vec::new(),
+            path: Vec::new(),
             message: PhantomData,
         }
     }
 
     /// Adds a semantic node with the given AccessKit role.
     pub fn node(&mut self, key: impl Into<String>, role: Role) -> Node<'_> {
-        let id = self.node_id(key);
-        let node = AccessNode::new(role);
-
-        self.root_children.push(id);
-        self.nodes.push((id, node));
-        let node_index = self.nodes.len() - 1;
+        let node_index = self.add_node(key, role);
 
         Node::new(&mut self.nodes[node_index].1)
+    }
+
+    /// Adds a semantic container and builds its children.
+    pub fn container(
+        &mut self,
+        key: impl Into<String>,
+        role: Role,
+        children: impl FnOnce(&mut Self),
+    ) -> Node<'_> {
+        let key = key.into();
+        let node_index = self.add_node(key.clone(), role);
+        let parent_depth = self.parent_nodes.len();
+        let path_depth = self.path.len();
+
+        self.parent_nodes.push(node_index);
+        self.path.push(key);
+        children(self);
+        self.parent_nodes.truncate(parent_depth);
+        self.path.truncate(path_depth);
+
+        Node::new(&mut self.nodes[node_index].1)
+    }
+
+    /// Adds a labelled group and builds its children.
+    pub fn group(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        children: impl FnOnce(&mut Self),
+    ) -> Node<'_> {
+        self.container(key, Role::Group, children).label(label)
+    }
+
+    /// Adds a labelled list and builds its items.
+    pub fn list(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        children: impl FnOnce(&mut Self),
+    ) -> Node<'_> {
+        self.container(key, Role::List, children).label(label)
+    }
+
+    /// Adds a list item with an accessible label.
+    pub fn list_item(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_> {
+        self.node(key, Role::ListItem).label(label)
     }
 
     /// Adds a paragraph containing `text`.
@@ -155,16 +202,32 @@ impl<'a, M> Ui<'a, M> {
             .numeric_value(value)
     }
 
-    /// Returns the stable node ID associated with `key`, allocating it if necessary.
-    fn node_id(&mut self, key: impl Into<String>) -> NodeId {
-        let key = key.into();
-        if let Some(id) = self.node_ids.get(&key) {
+    /// Adds a node under the current semantic parent and returns its vector index.
+    fn add_node(&mut self, key: impl Into<String>, role: Role) -> usize {
+        let mut path = self.path.clone();
+        path.push(key.into());
+        let id = self.node_id(path);
+        let node_index = self.nodes.len();
+
+        if let Some(parent_index) = self.parent_nodes.last().copied() {
+            self.nodes[parent_index].1.push_child(id);
+        } else {
+            self.root_children.push(id);
+        }
+        self.nodes.push((id, AccessNode::new(role)));
+
+        node_index
+    }
+
+    /// Returns the stable node ID associated with `path`, allocating it if necessary.
+    fn node_id(&mut self, path: Vec<String>) -> NodeId {
+        if let Some(id) = self.node_ids.get(&path) {
             return *id;
         }
 
         let id = NodeId(*self.next_node_id);
         *self.next_node_id += 1;
-        self.node_ids.insert(key, id);
+        self.node_ids.insert(path, id);
         id
     }
 
@@ -236,5 +299,24 @@ mod tests {
         let second_id = molerat.last_update().map(|update| update.nodes[2].0);
 
         assert_eq!(first_id, second_id);
+    }
+
+    #[test]
+    fn scopes_identical_keys_to_their_parent() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.group("left", "Left", |ui| {
+                ui.text("title", "Left title");
+            });
+            ui.group("right", "Right", |ui| {
+                ui.text("title", "Right title");
+            });
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        assert_ne!(update.nodes[2].0, update.nodes[4].0);
     }
 }
