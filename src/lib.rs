@@ -11,4 +11,8 @@ mod atspi;
 #[cfg(feature = "mcp")]
 mod mcp;
 
+/// Re-export of [`accesskit`](https://docs.rs/accesskit/latest/accesskit/) for
+/// convenience.
+pub use accesskit;
+
 pub use ui::Molerat;

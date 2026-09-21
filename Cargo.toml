@@ -10,3 +10,4 @@ atspi = []
 mcp = []
 
 [dependencies]
+accesskit = "0.25.0"
