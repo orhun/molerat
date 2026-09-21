@@ -285,6 +285,52 @@ mod tests {
     }
 
     #[test]
+    fn publishes_a_table_with_structural_metadata() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.table("processes", "Processes", |ui| {
+                ui.row("headers", |ui| {
+                    ui.column_header("name", "Name");
+                    ui.column_header("cpu", "CPU");
+                });
+                ui.row("molerat", |ui| {
+                    ui.row_header("name", "molerat");
+                    ui.cell("cpu", "18 percent");
+                });
+            });
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        let table = &update.nodes[1].1;
+        let header_row = &update.nodes[2].1;
+        let name_header = &update.nodes[3].1;
+        let cpu_header = &update.nodes[4].1;
+        let process_row = &update.nodes[5].1;
+        let process_name = &update.nodes[6].1;
+        let process_cpu = &update.nodes[7].1;
+
+        assert_eq!(table.role(), Role::Table);
+        assert_eq!(table.label(), Some("Processes"));
+        assert_eq!(table.row_count(), Some(2));
+        assert_eq!(table.column_count(), Some(2));
+        assert_eq!(header_row.role(), Role::Row);
+        assert_eq!(header_row.row_index(), Some(0));
+        assert_eq!(name_header.role(), Role::ColumnHeader);
+        assert_eq!(name_header.column_index(), Some(0));
+        assert_eq!(cpu_header.role(), Role::ColumnHeader);
+        assert_eq!(cpu_header.column_index(), Some(1));
+        assert_eq!(process_row.role(), Role::Row);
+        assert_eq!(process_row.row_index(), Some(1));
+        assert_eq!(process_name.role(), Role::RowHeader);
+        assert_eq!(process_name.column_index(), Some(0));
+        assert_eq!(process_cpu.role(), Role::Cell);
+        assert_eq!(process_cpu.column_index(), Some(1));
+    }
+
+    #[test]
     fn publishes_node_state_and_focus() {
         let mut molerat: Molerat = Molerat::new("example");
 

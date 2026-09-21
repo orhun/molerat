@@ -189,6 +189,71 @@ impl<'a, M> Ui<'a, M> {
         role: Role,
         children: impl FnOnce(&mut Self),
     ) -> Node<'_, M> {
+        let node_index = self.add_container(key, role, children);
+
+        self.node_builder(node_index)
+    }
+
+    /// Adds a labelled table and builds its rows.
+    ///
+    /// The row and column counts are derived from the completed table structure.
+    pub fn table(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        rows: impl FnOnce(&mut Self),
+    ) -> Node<'_, M> {
+        let node_index = self.add_container(key, Role::Table, rows);
+        let row_ids = self.nodes[node_index].1.children().to_vec();
+        let row_count = row_ids.len();
+        let column_count = row_ids
+            .iter()
+            .filter_map(|row_id| self.nodes.iter().find(|(id, _)| id == row_id))
+            .map(|(_, row)| row.children().len())
+            .max()
+            .unwrap_or_default();
+
+        self.node_builder(node_index)
+            .label(label)
+            .with_accesskit(|node| {
+                node.set_row_count(row_count);
+                node.set_column_count(column_count);
+            })
+    }
+
+    /// Adds a row to the current table and builds its cells.
+    pub fn row(&mut self, key: impl Into<String>, cells: impl FnOnce(&mut Self)) -> Node<'_, M> {
+        let row_index = self.next_child_index(Role::Table);
+        self.container(key, Role::Row, cells)
+            .with_accesskit(|node| node.set_row_index(row_index))
+    }
+
+    /// Adds a cell to the current table row.
+    pub fn cell(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
+        self.table_cell(key, label, Role::Cell)
+    }
+
+    /// Adds a column-header cell to the current table row.
+    pub fn column_header(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+    ) -> Node<'_, M> {
+        self.table_cell(key, label, Role::ColumnHeader)
+    }
+
+    /// Adds a row-header cell to the current table row.
+    pub fn row_header(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
+        self.table_cell(key, label, Role::RowHeader)
+    }
+
+    /// Adds a semantic container, builds its children, and returns its node index.
+    fn add_container(
+        &mut self,
+        key: impl Into<String>,
+        role: Role,
+        children: impl FnOnce(&mut Self),
+    ) -> usize {
         let key = key.into();
         let node_index = self.add_node(key.clone(), role);
         let parent_depth = self.parent_nodes.len();
@@ -200,7 +265,7 @@ impl<'a, M> Ui<'a, M> {
         self.parent_nodes.truncate(parent_depth);
         self.path.truncate(path_depth);
 
-        self.node_builder(node_index)
+        node_index
     }
 
     /// Adds a labelled group and builds its children.
@@ -249,10 +314,7 @@ impl<'a, M> Ui<'a, M> {
         key: impl Into<String>,
         label: impl Into<String>,
     ) -> Node<'_, M> {
-        let Some(parent) = self.parent_nodes.last() else {
-            unreachable!("the application root is always a semantic parent");
-        };
-        let position = self.nodes[*parent].1.children().len();
+        let position = self.next_child_index(Role::ListBox);
         self.node(key, Role::ListBoxOption)
             .label(label)
             .with_accesskit(|node| node.set_position_in_set(position))
@@ -306,6 +368,33 @@ impl<'a, M> Ui<'a, M> {
             .label(label)
             .numeric_range(minimum, maximum)
             .numeric_value(value)
+    }
+
+    /// Adds a table cell with its position in the current row.
+    fn table_cell(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        role: Role,
+    ) -> Node<'_, M> {
+        let column_index = self.next_child_index(Role::Row);
+        self.node(key, role)
+            .label(label)
+            .with_accesskit(|node| node.set_column_index(column_index))
+    }
+
+    /// Returns the next child index after checking the current semantic parent.
+    fn next_child_index(&self, expected_parent_role: Role) -> usize {
+        let Some(parent_index) = self.parent_nodes.last().copied() else {
+            unreachable!("the application root is always a semantic parent");
+        };
+        let parent = &self.nodes[parent_index].1;
+        assert_eq!(
+            parent.role(),
+            expected_parent_role,
+            "semantic child must be added to a {expected_parent_role:?} node"
+        );
+        parent.children().len()
     }
 
     /// Adds a node under the current semantic parent and returns its vector index.

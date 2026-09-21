@@ -199,9 +199,23 @@ impl App {
                 .description(format!("{network} megabytes per second"));
             });
 
-            ui.list_box("processes", "Processes by CPU usage", |ui| {
+            ui.table("processes", "Processes by CPU usage", |ui| {
+                ui.row("headers", |ui| {
+                    ui.column_header("pid", "PID");
+                    ui.column_header("name", "Name");
+                    ui.column_header("user", "User");
+                    ui.column_header("cpu", "CPU usage");
+                    ui.column_header("memory", "Memory usage");
+                });
                 for (index, process) in PROCESSES.iter().enumerate() {
-                    ui.list_box_option(process.pid.to_string(), process.name)
+                    ui.row(process.pid.to_string(), |ui| {
+                        ui.cell("pid", process.pid.to_string());
+                        ui.row_header("name", process.name);
+                        ui.cell("user", process.user);
+                        ui.cell("cpu", format!("{} percent", process.cpu));
+                        ui.cell("memory", format!("{} megabytes", process.memory));
+                    })
+                        .label(process.name)
                         .description(format!(
                             "Process ID {}, user {}, CPU {} percent, memory {} megabytes, status {}",
                             process.pid,
