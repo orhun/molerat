@@ -1,16 +1,24 @@
-use accesskit::{Node as AccessNode, Toggled};
+use accesskit::{Node as AccessNode, NodeId, Toggled};
 
 /// Configures a node added to a semantic tree.
 #[derive(Debug)]
 pub struct Node<'a> {
+    /// The stable ID of the AccessKit node being configured.
+    id: NodeId,
     /// The AccessKit node being configured.
     inner: &'a mut AccessNode,
+    /// The node selected as semantic focus in the current publication.
+    focus: &'a mut Option<NodeId>,
 }
 
 impl<'a> Node<'a> {
     /// Creates a semantic node builder for an AccessKit node.
-    pub(crate) fn new(inner: &'a mut AccessNode) -> Self {
-        Self { inner }
+    pub(crate) fn new(
+        id: NodeId,
+        inner: &'a mut AccessNode,
+        focus: &'a mut Option<NodeId>,
+    ) -> Self {
+        Self { id, inner, focus }
     }
 
     /// Sets the node's accessible label.
@@ -34,6 +42,52 @@ impl<'a> Node<'a> {
     /// Sets whether the node is toggled.
     pub fn toggled(self, toggled: bool) -> Self {
         self.inner.set_toggled(Toggled::from(toggled));
+        self
+    }
+
+    /// Sets whether the node is selected.
+    pub fn selected(self, selected: bool) -> Self {
+        self.inner.set_selected(selected);
+        self
+    }
+
+    /// Sets whether the node is disabled.
+    pub fn disabled(self, disabled: bool) -> Self {
+        if disabled {
+            self.inner.set_disabled();
+        } else {
+            self.inner.clear_disabled();
+        }
+        self
+    }
+
+    /// Sets whether the node is expanded.
+    pub fn expanded(self, expanded: bool) -> Self {
+        self.inner.set_expanded(expanded);
+        self
+    }
+
+    /// Sets whether the node and its descendants are hidden.
+    pub fn hidden(self, hidden: bool) -> Self {
+        if hidden {
+            self.inner.set_hidden();
+        } else {
+            self.inner.clear_hidden();
+        }
+        self
+    }
+
+    /// Sets whether the node has semantic focus.
+    pub fn focused(self, focused: bool) -> Self {
+        if focused {
+            assert!(
+                self.focus.is_none() || *self.focus == Some(self.id),
+                "only one semantic node can be focused"
+            );
+            *self.focus = Some(self.id);
+        } else if *self.focus == Some(self.id) {
+            *self.focus = None;
+        }
         self
     }
 
@@ -162,5 +216,43 @@ mod tests {
         assert_eq!(first.label(), Some("First task"));
         assert_eq!(second.role(), Role::ListItem);
         assert_eq!(second.label(), Some("Second task"));
+    }
+
+    #[test]
+    fn publishes_node_state_and_focus() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.list("tasks", "Tasks", |ui| {
+                ui.list_item("first", "First task")
+                    .selected(true)
+                    .disabled(true)
+                    .expanded(false)
+                    .focused(true);
+                ui.list_item("hidden", "Hidden task").hidden(true);
+            });
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        let (item_id, item) = &update.nodes[2];
+        assert_eq!(update.focus, *item_id);
+        assert_eq!(item.is_selected(), Some(true));
+        assert!(item.is_disabled());
+        assert_eq!(item.is_expanded(), Some(false));
+        assert!(!item.is_hidden());
+        assert!(update.nodes[3].1.is_hidden());
+    }
+
+    #[test]
+    #[should_panic(expected = "only one semantic node can be focused")]
+    fn rejects_multiple_focused_nodes() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.button("first", "First").focused(true);
+            ui.button("second", "Second").focused(true);
+        });
     }
 }

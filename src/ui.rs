@@ -76,6 +76,8 @@ pub struct Ui<'a, M = ()> {
     parent_nodes: Vec<usize>,
     /// Key segments identifying the current container path.
     path: Vec<String>,
+    /// The node selected as semantic focus in this publication.
+    focus: Option<NodeId>,
     /// Associates the builder with the application's message type.
     message: PhantomData<fn() -> M>,
 }
@@ -95,6 +97,7 @@ impl<'a, M> Ui<'a, M> {
             root_children: Vec::new(),
             parent_nodes: Vec::new(),
             path: Vec::new(),
+            focus: None,
             message: PhantomData,
         }
     }
@@ -103,7 +106,7 @@ impl<'a, M> Ui<'a, M> {
     pub fn node(&mut self, key: impl Into<String>, role: Role) -> Node<'_> {
         let node_index = self.add_node(key, role);
 
-        Node::new(&mut self.nodes[node_index].1)
+        self.node_builder(node_index)
     }
 
     /// Adds a semantic container and builds its children.
@@ -124,7 +127,7 @@ impl<'a, M> Ui<'a, M> {
         self.parent_nodes.truncate(parent_depth);
         self.path.truncate(path_depth);
 
-        Node::new(&mut self.nodes[node_index].1)
+        self.node_builder(node_index)
     }
 
     /// Adds a labelled group and builds its children.
@@ -231,6 +234,13 @@ impl<'a, M> Ui<'a, M> {
         id
     }
 
+    /// Returns a configurable node builder for the node at `node_index`.
+    fn node_builder(&mut self, node_index: usize) -> Node<'_> {
+        let (nodes, focus) = (&mut self.nodes, &mut self.focus);
+        let id = nodes[node_index].0;
+        Node::new(id, &mut nodes[node_index].1, focus)
+    }
+
     /// Finishes the builder and returns the complete AccessKit tree update.
     fn finish(mut self) -> TreeUpdate {
         let mut root = AccessNode::new(Role::Application);
@@ -242,7 +252,7 @@ impl<'a, M> Ui<'a, M> {
             nodes: self.nodes,
             tree: Some(TreeInfo::new(ROOT_ID)),
             tree_id: TreeId::ROOT,
-            focus: ROOT_ID,
+            focus: self.focus.unwrap_or(ROOT_ID),
         }
     }
 }
