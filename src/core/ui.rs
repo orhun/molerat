@@ -1,6 +1,6 @@
+use super::{action::Actions, node::Node};
 #[cfg(feature = "atspi")]
 use crate::atspi::Atspi;
-use crate::{action::Actions, node::Node};
 use accesskit::{
     ActionRequest, Live, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate,
 };

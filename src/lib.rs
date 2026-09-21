@@ -3,9 +3,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
-mod action;
-mod node;
-mod ui;
+mod core;
 
 #[cfg(feature = "atspi")]
 mod atspi;
@@ -16,5 +14,4 @@ mod mcp;
 /// convenience.
 pub use accesskit;
 
-pub use node::Node;
-pub use ui::{Molerat, Ui};
+pub use core::{Molerat, Node, Ui};
