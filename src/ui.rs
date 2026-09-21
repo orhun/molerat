@@ -29,6 +29,15 @@ pub struct Molerat<M = ()> {
 
 impl<M> Molerat<M> {
     /// Creates an integration handle for an application using message type `M`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use molerat::Molerat;
+    ///
+    /// let molerat = Molerat::<()>::new("Tasks");
+    /// assert_eq!(molerat.name(), "Tasks");
+    /// ```
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -43,6 +52,14 @@ impl<M> Molerat<M> {
     }
 
     /// Creates an integration handle with Unix AT-SPI exposure enabled.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use molerat::Molerat;
+    ///
+    /// let molerat = Molerat::<()>::new_atspi("Tasks");
+    /// ```
     #[cfg(feature = "atspi")]
     pub fn new_atspi(name: impl Into<String>) -> Self {
         let mut molerat = Self::new(name);
@@ -51,22 +68,71 @@ impl<M> Molerat<M> {
     }
 
     /// Returns the application name exposed to consumers.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use molerat::Molerat;
+    ///
+    /// let molerat = Molerat::<()>::new("Tasks");
+    /// assert_eq!(molerat.name(), "Tasks");
+    /// ```
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Publishes an AccessKit tree update.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use molerat::Molerat;
+    /// # use molerat::accesskit::{Node, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
+    /// # let root = NodeId(0);
+    /// # let update = TreeUpdate {
+    /// #     nodes: vec![(root, Node::new(Role::Window))],
+    /// #     tree: Some(TreeInfo::new(root)),
+    /// #     tree_id: TreeId::ROOT,
+    /// #     focus: root,
+    /// # };
+    ///
+    /// let mut molerat: Molerat = Molerat::new("Tasks");
+    /// molerat.update(update);
+    /// ```
     pub fn update(&mut self, update: TreeUpdate) {
         self.actions.clear();
         self.store_update(update);
     }
 
     /// Returns the most recently published AccessKit tree update.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use molerat::Molerat;
+    ///
+    /// let mut molerat: Molerat = Molerat::new("Tasks");
+    /// molerat.publish(|ui| {
+    ///     ui.text("status", "Ready");
+    /// });
+    /// assert!(molerat.last_update().is_some());
+    /// ```
     pub fn last_update(&self) -> Option<&TreeUpdate> {
         self.last_update.as_ref()
     }
 
     /// Builds and publishes a complete semantic tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use molerat::Molerat;
+    ///
+    /// let mut molerat: Molerat = Molerat::new("Tasks");
+    /// molerat.publish(|ui| {
+    ///     ui.text("status", "Ready");
+    /// });
+    /// ```
     pub fn publish(&mut self, build: impl FnOnce(&mut Ui<'_, M>)) {
         self.actions.clear();
         let mut ui = Ui::new(
@@ -81,6 +147,30 @@ impl<M> Molerat<M> {
     }
 
     /// Handles an AccessKit action request and queues its application message.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use molerat::{Molerat, accesskit::Action};
+    /// # use molerat::accesskit::{ActionRequest, TreeId};
+    /// # #[derive(Debug, PartialEq)]
+    /// # enum Message { Save }
+    ///
+    /// let mut molerat = Molerat::new("Editor");
+    /// molerat.publish(|ui| {
+    ///     ui.button("save", "Save")
+    ///         .on_action(Action::Click, |_| Message::Save);
+    /// });
+    /// # let Some(update) = molerat.last_update() else { return };
+    /// # let request = ActionRequest {
+    /// #     action: Action::Click,
+    /// #     target_tree: TreeId::ROOT,
+    /// #     target_node: update.nodes[1].0,
+    /// #     data: None,
+    /// # };
+    ///
+    /// assert!(molerat.handle_action(request));
+    /// ```
     pub fn handle_action(&mut self, request: ActionRequest) -> bool {
         if request.target_tree != TreeId::ROOT {
             return false;
@@ -95,8 +185,32 @@ impl<M> Molerat<M> {
 
     /// Drains the application messages produced by handled action requests.
     ///
-    /// When constructed with [`Molerat::new_atspi`], pending platform action requests are handled
+    /// When constructed with `Molerat::new_atspi`, pending platform action requests are handled
     /// before messages are drained. This keeps application action handlers on the TUI thread.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Action};
+    /// # use molerat::accesskit::{ActionRequest, TreeId};
+    /// # #[derive(Debug, PartialEq)]
+    /// # enum Message { Save }
+    /// # let mut molerat = Molerat::new("Editor");
+    /// # molerat.publish(|ui| {
+    /// #     ui.button("save", "Save")
+    /// #         .on_action(Action::Click, |_| Message::Save);
+    /// # });
+    /// # let Some(update) = molerat.last_update() else { return };
+    /// # let request = ActionRequest {
+    /// #     action: Action::Click,
+    /// #     target_tree: TreeId::ROOT,
+    /// #     target_node: update.nodes[1].0,
+    /// #     data: None,
+    /// # };
+    /// # assert!(molerat.handle_action(request));
+    /// let messages = molerat.messages().collect::<Vec<_>>();
+    /// assert_eq!(messages, [Message::Save]);
+    /// ```
     pub fn messages(&mut self) -> impl Iterator<Item = M> + '_ {
         #[cfg(feature = "atspi")]
         {
@@ -162,6 +276,18 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a semantic node with the given AccessKit role.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Role};
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.node("status", Role::Status)
+    ///     .label("Application status")
+    ///     .value("Ready");
+    /// # });
+    /// ```
     pub fn node(&mut self, key: impl Into<String>, role: Role) -> Node<'_, M> {
         let node_index = self.add_node(key, role);
 
@@ -172,6 +298,17 @@ impl<'a, M> Ui<'a, M> {
     ///
     /// This is a convenience wrapper around [`Node::custom_action`] that uses the application root
     /// as the action target.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # enum Message { Refresh }
+    /// # let mut molerat = Molerat::<Message>::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.command("refresh", "Refresh application", || Message::Refresh);
+    /// # });
+    /// ```
     pub fn command(
         &mut self,
         key: impl Into<String>,
@@ -183,6 +320,18 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a semantic container and builds its children.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Role};
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.container("sidebar", Role::Group, |ui| {
+    ///     ui.text("status", "Ready");
+    /// });
+    /// # });
+    /// ```
     pub fn container(
         &mut self,
         key: impl Into<String>,
@@ -197,6 +346,25 @@ impl<'a, M> Ui<'a, M> {
     /// Adds a labelled table and builds its rows.
     ///
     /// The row and column counts are derived from the completed table structure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.table("processes", "Processes", |ui| {
+    ///     ui.row("headers", |ui| {
+    ///         ui.column_header("name", "Name");
+    ///         ui.column_header("cpu", "CPU usage");
+    ///     });
+    ///     ui.row("molerat", |ui| {
+    ///         ui.row_header("name", "molerat");
+    ///         ui.cell("cpu", "18 percent");
+    ///     });
+    /// });
+    /// # });
+    /// ```
     pub fn table(
         &mut self,
         key: impl Into<String>,
@@ -222,6 +390,21 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a row to the current table and builds its cells.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.table("processes", "Processes", |ui| {
+    /// ui.row("molerat", |ui| {
+    ///     ui.cell("name", "molerat");
+    ///     ui.cell("cpu", "18 percent");
+    /// });
+    /// # });
+    /// # });
+    /// ```
     pub fn row(&mut self, key: impl Into<String>, cells: impl FnOnce(&mut Self)) -> Node<'_, M> {
         let row_index = self.next_child_index(Role::Table);
         self.container(key, Role::Row, cells)
@@ -229,11 +412,39 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a cell to the current table row.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.table("processes", "Processes", |ui| {
+    /// # ui.row("molerat", |ui| {
+    /// ui.cell("cpu", "18 percent");
+    /// # });
+    /// # });
+    /// # });
+    /// ```
     pub fn cell(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
         self.table_cell(key, label, Role::Cell)
     }
 
     /// Adds a column-header cell to the current table row.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.table("processes", "Processes", |ui| {
+    /// # ui.row("headers", |ui| {
+    /// ui.column_header("cpu", "CPU usage");
+    /// # });
+    /// # });
+    /// # });
+    /// ```
     pub fn column_header(
         &mut self,
         key: impl Into<String>,
@@ -243,6 +454,20 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a row-header cell to the current table row.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.table("processes", "Processes", |ui| {
+    /// # ui.row("molerat", |ui| {
+    /// ui.row_header("name", "molerat");
+    /// # });
+    /// # });
+    /// # });
+    /// ```
     pub fn row_header(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
         self.table_cell(key, label, Role::RowHeader)
     }
@@ -269,6 +494,18 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a labelled group and builds its children.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.group("summary", "System summary", |ui| {
+    ///     ui.text("status", "All systems operational");
+    /// });
+    /// # });
+    /// ```
     pub fn group(
         &mut self,
         key: impl Into<String>,
@@ -279,6 +516,18 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a labelled list and builds its items.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.list("alerts", "Recent alerts", |ui| {
+    ///     ui.list_item("backup", "Backup completed");
+    /// });
+    /// # });
+    /// ```
     pub fn list(
         &mut self,
         key: impl Into<String>,
@@ -289,6 +538,19 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a labelled selectable list and builds its options.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.list_box("recipes", "Recipes", |ui| {
+    ///     ui.list_box_option("ratatouille", "Ratatouille").selected(true);
+    ///     ui.list_box_option("confit", "Confit byaldi");
+    /// });
+    /// # });
+    /// ```
     pub fn list_box(
         &mut self,
         key: impl Into<String>,
@@ -304,11 +566,37 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a list item with an accessible label.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.list("alerts", "Recent alerts", |ui| {
+    /// ui.list_item("backup", "Backup completed");
+    /// # });
+    /// # });
+    /// ```
     pub fn list_item(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::ListItem).label(label)
     }
 
     /// Adds an option to a selectable list with its position in that list.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.list_box("recipes", "Recipes", |ui| {
+    /// ui.list_box_option("ratatouille", "Ratatouille")
+    ///     .selected(true)
+    ///     .focused(true);
+    /// # });
+    /// # });
+    /// ```
     pub fn list_box_option(
         &mut self,
         key: impl Into<String>,
@@ -321,21 +609,61 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a paragraph containing `text`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.paragraph("instructions", "Select a recipe to begin.");
+    /// # });
+    /// ```
     pub fn paragraph(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::Paragraph).value(text)
     }
 
     /// Adds a static text node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.text("status", "Ready");
+    /// # });
+    /// ```
     pub fn text(&mut self, key: impl Into<String>, text: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::Label).value(text)
     }
 
     /// Adds a button with an accessible label.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.button("save", "Save");
+    /// # });
+    /// ```
     pub fn button(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::Button).label(label)
     }
 
     /// Adds a text input with a label and current value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.text_input("search", "Search", "molerat");
+    /// # });
+    /// ```
     pub fn text_input(
         &mut self,
         key: impl Into<String>,
@@ -346,6 +674,16 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a checkbox with a label and checked state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.checkbox("auto-refresh", "Auto refresh", true);
+    /// # });
+    /// ```
     pub fn checkbox(
         &mut self,
         key: impl Into<String>,
@@ -356,6 +694,16 @@ impl<'a, M> Ui<'a, M> {
     }
 
     /// Adds a progress indicator with a label and numeric range.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.progress("cpu", "CPU usage", 42.0, 0.0, 100.0);
+    /// # });
+    /// ```
     pub fn progress(
         &mut self,
         key: impl Into<String>,

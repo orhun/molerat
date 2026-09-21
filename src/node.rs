@@ -33,36 +33,98 @@ impl<'a, M> Node<'a, M> {
     }
 
     /// Sets the node's accessible label.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Role};
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.node("status", Role::Status).label("Application status");
+    /// # });
+    /// ```
     pub fn label(self, label: impl Into<String>) -> Self {
         self.inner.set_label(label);
         self
     }
 
     /// Sets the node's value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Role};
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.node("status", Role::Status).value("Ready");
+    /// # });
+    /// ```
     pub fn value(self, value: impl Into<String>) -> Self {
         self.inner.set_value(value);
         self
     }
 
     /// Sets the node's accessible description.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.button("save", "Save").description("Save current changes");
+    /// # });
+    /// ```
     pub fn description(self, description: impl Into<String>) -> Self {
         self.inner.set_description(description);
         self
     }
 
     /// Sets whether the node is toggled.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.checkbox("auto-refresh", "Auto refresh", false).toggled(true);
+    /// # });
+    /// ```
     pub fn toggled(self, toggled: bool) -> Self {
         self.inner.set_toggled(Toggled::from(toggled));
         self
     }
 
     /// Sets whether the node is selected.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// # ui.list_box("recipes", "Recipes", |ui| {
+    /// ui.list_box_option("ratatouille", "Ratatouille").selected(true);
+    /// # });
+    /// # });
+    /// ```
     pub fn selected(self, selected: bool) -> Self {
         self.inner.set_selected(selected);
         self
     }
 
     /// Sets whether the node is disabled.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.button("save", "Save").disabled(true);
+    /// # });
+    /// ```
     pub fn disabled(self, disabled: bool) -> Self {
         if disabled {
             self.inner.set_disabled();
@@ -73,12 +135,32 @@ impl<'a, M> Node<'a, M> {
     }
 
     /// Sets whether the node is expanded.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Role};
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.node("settings", Role::TreeItem).expanded(true);
+    /// # });
+    /// ```
     pub fn expanded(self, expanded: bool) -> Self {
         self.inner.set_expanded(expanded);
         self
     }
 
     /// Sets whether the node and its descendants are hidden.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.group("advanced", "Advanced settings", |_| {}).hidden(true);
+    /// # });
+    /// ```
     pub fn hidden(self, hidden: bool) -> Self {
         if hidden {
             self.inner.set_hidden();
@@ -89,6 +171,16 @@ impl<'a, M> Node<'a, M> {
     }
 
     /// Sets whether the node has semantic focus.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.button("save", "Save").focused(true);
+    /// # });
+    /// ```
     pub fn focused(self, focused: bool) -> Self {
         if focused {
             assert!(
@@ -103,12 +195,34 @@ impl<'a, M> Node<'a, M> {
     }
 
     /// Sets the node's current numeric value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Role};
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.node("cpu", Role::ProgressIndicator).numeric_value(42.0);
+    /// # });
+    /// ```
     pub fn numeric_value(self, value: f64) -> Self {
         self.inner.set_numeric_value(value);
         self
     }
 
     /// Sets the minimum and maximum numeric values for the node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::{Molerat, accesskit::Role};
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.node("cpu", Role::ProgressIndicator)
+    ///     .numeric_range(0.0, 100.0)
+    ///     .numeric_value(42.0);
+    /// # });
+    /// ```
     pub fn numeric_range(self, minimum: f64, maximum: f64) -> Self {
         self.inner.set_min_numeric_value(minimum);
         self.inner.set_max_numeric_value(maximum);
@@ -116,6 +230,19 @@ impl<'a, M> Node<'a, M> {
     }
 
     /// Registers an action supported by this node and maps it to an application message.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// use molerat::accesskit::Action;
+    /// # enum Message { Save }
+    /// # let mut molerat = Molerat::<Message>::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.button("save", "Save")
+    ///     .on_action(Action::Click, |_| Message::Save);
+    /// # });
+    /// ```
     pub fn on_action(
         self,
         action: Action,
@@ -130,6 +257,18 @@ impl<'a, M> Node<'a, M> {
     ///
     /// `key` preserves the action's numeric AccessKit ID across publications, `description` is
     /// exposed to consumers, and `handler` maps requests for the action to application messages.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// # enum Message { Refresh }
+    /// # let mut molerat = Molerat::<Message>::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.button("refresh", "Refresh")
+    ///     .custom_action("force-refresh", "Force refresh", || Message::Refresh);
+    /// # });
+    /// ```
     pub fn custom_action(
         self,
         key: impl Into<String>,
@@ -145,6 +284,18 @@ impl<'a, M> Node<'a, M> {
     }
 
     /// Applies raw AccessKit configuration to the node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use molerat::Molerat;
+    /// use molerat::accesskit::Live;
+    /// # let mut molerat: Molerat = Molerat::new("example");
+    /// # molerat.publish(|ui| {
+    /// ui.text("status", "Build complete")
+    ///     .with_accesskit(|node| node.set_live(Live::Polite));
+    /// # });
+    /// ```
     pub fn with_accesskit(self, configure: impl FnOnce(&mut AccessNode)) -> Self {
         configure(self.inner);
         self
