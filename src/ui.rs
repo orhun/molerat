@@ -1,3 +1,5 @@
+#[cfg(feature = "atspi")]
+use crate::atspi::Atspi;
 use crate::{action::Actions, node::Node};
 use accesskit::{ActionRequest, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
 use std::collections::{HashMap, VecDeque};
@@ -20,6 +22,9 @@ pub struct Molerat<M = ()> {
     actions: Actions<M>,
     /// Messages produced by handled action requests.
     messages: VecDeque<M>,
+    /// Optional connection to the Unix AT-SPI accessibility bus.
+    #[cfg(feature = "atspi")]
+    atspi: Option<Atspi>,
 }
 
 impl<M> Molerat<M> {
@@ -32,7 +37,17 @@ impl<M> Molerat<M> {
             next_node_id: ROOT_ID.0 + 1,
             actions: Actions::default(),
             messages: VecDeque::new(),
+            #[cfg(feature = "atspi")]
+            atspi: None,
         }
+    }
+
+    /// Creates an integration handle with Unix AT-SPI exposure enabled.
+    #[cfg(feature = "atspi")]
+    pub fn new_atspi(name: impl Into<String>) -> Self {
+        let mut molerat = Self::new(name);
+        molerat.atspi = Some(Atspi::new(None));
+        molerat
     }
 
     /// Returns the application name exposed to consumers.
@@ -43,7 +58,7 @@ impl<M> Molerat<M> {
     /// Publishes an AccessKit tree update.
     pub fn update(&mut self, update: TreeUpdate) {
         self.actions.clear();
-        self.last_update = Some(update);
+        self.store_update(update);
     }
 
     /// Returns the most recently published AccessKit tree update.
@@ -62,7 +77,7 @@ impl<M> Molerat<M> {
         );
         build(&mut ui);
         let update = ui.finish();
-        self.last_update = Some(update);
+        self.store_update(update);
     }
 
     /// Handles an AccessKit action request and queues its application message.
@@ -79,8 +94,30 @@ impl<M> Molerat<M> {
     }
 
     /// Drains the application messages produced by handled action requests.
+    ///
+    /// When constructed with [`Molerat::new_atspi`], pending platform action requests are handled
+    /// before messages are drained. This keeps application action handlers on the TUI thread.
     pub fn messages(&mut self) -> impl Iterator<Item = M> + '_ {
+        #[cfg(feature = "atspi")]
+        {
+            let requests = self
+                .atspi
+                .as_ref()
+                .map_or_else(Vec::new, Atspi::drain_actions);
+            for request in requests {
+                self.handle_action(request);
+            }
+        }
         self.messages.drain(..)
+    }
+
+    /// Stores an update and forwards it to active consumers.
+    fn store_update(&mut self, update: TreeUpdate) {
+        #[cfg(feature = "atspi")]
+        if let Some(atspi) = &mut self.atspi {
+            atspi.update(&update);
+        }
+        self.last_update = Some(update);
     }
 }
 
@@ -111,7 +148,7 @@ impl<'a, M> Ui<'a, M> {
         next_node_id: &'a mut u64,
         actions: &'a mut Actions<M>,
     ) -> Self {
-        let mut root = AccessNode::new(Role::Application);
+        let mut root = AccessNode::new(Role::Window);
         root.set_label(application_name);
         Self {
             node_ids,
@@ -186,9 +223,39 @@ impl<'a, M> Ui<'a, M> {
         self.container(key, Role::List, children).label(label)
     }
 
+    /// Adds a labelled selectable list and builds its options.
+    pub fn list_box(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+        children: impl FnOnce(&mut Self),
+    ) -> Node<'_, M> {
+        self.container(key, Role::ListBox, children)
+            .label(label)
+            .with_accesskit(|node| {
+                let size = node.children().len();
+                node.set_size_of_set(size);
+            })
+    }
+
     /// Adds a list item with an accessible label.
     pub fn list_item(&mut self, key: impl Into<String>, label: impl Into<String>) -> Node<'_, M> {
         self.node(key, Role::ListItem).label(label)
+    }
+
+    /// Adds an option to a selectable list with its position in that list.
+    pub fn list_box_option(
+        &mut self,
+        key: impl Into<String>,
+        label: impl Into<String>,
+    ) -> Node<'_, M> {
+        let Some(parent) = self.parent_nodes.last() else {
+            unreachable!("the application root is always a semantic parent");
+        };
+        let position = self.nodes[*parent].1.children().len();
+        self.node(key, Role::ListBoxOption)
+            .label(label)
+            .with_accesskit(|node| node.set_position_in_set(position))
     }
 
     /// Adds a paragraph containing `text`.

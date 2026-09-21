@@ -180,7 +180,7 @@ mod tests {
         let (root_id, root) = &update.nodes[0];
         let (paragraph_id, paragraph) = &update.nodes[1];
         assert_eq!(*root_id, ROOT_ID);
-        assert_eq!(root.role(), Role::Application);
+        assert_eq!(root.role(), Role::Window);
         assert_eq!(root.label(), Some("example"));
         assert_eq!(root.children(), [*paragraph_id]);
         assert_eq!(paragraph.role(), Role::Paragraph);
@@ -256,6 +256,32 @@ mod tests {
         assert_eq!(first.label(), Some("First task"));
         assert_eq!(second.role(), Role::ListItem);
         assert_eq!(second.label(), Some("Second task"));
+    }
+
+    #[test]
+    fn publishes_a_selectable_list_with_position_metadata() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.list_box("recipes", "Recipes", |ui| {
+                ui.list_box_option("first", "Ratatouille");
+                ui.list_box_option("second", "Confit byaldi");
+            });
+        });
+
+        let Some(update) = molerat.last_update() else {
+            panic!("a tree update should have been published");
+        };
+        let list = &update.nodes[1].1;
+        let first = &update.nodes[2].1;
+        let second = &update.nodes[3].1;
+
+        assert_eq!(list.role(), Role::ListBox);
+        assert_eq!(list.size_of_set(), Some(2));
+        assert_eq!(first.role(), Role::ListBoxOption);
+        assert_eq!(first.position_in_set(), Some(0));
+        assert_eq!(second.role(), Role::ListBoxOption);
+        assert_eq!(second.position_in_set(), Some(1));
     }
 
     #[test]
