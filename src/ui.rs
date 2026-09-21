@@ -1,4 +1,7 @@
-use crate::{action::ActionHandlers, node::Node};
+use crate::{
+    action::{ActionHandlers, ActionRoute, CustomActionIds},
+    node::Node,
+};
 use accesskit::{ActionRequest, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
 use std::collections::{HashMap, VecDeque};
 
@@ -18,6 +21,8 @@ pub struct Molerat<M = ()> {
     next_node_id: u64,
     /// Message handlers for the actions supported by the current tree.
     action_handlers: ActionHandlers<M>,
+    /// Stable numeric IDs assigned to application-defined custom-action keys.
+    custom_action_ids: CustomActionIds,
     /// Messages produced by handled action requests.
     messages: VecDeque<M>,
 }
@@ -31,6 +36,7 @@ impl<M> Molerat<M> {
             node_ids: HashMap::new(),
             next_node_id: ROOT_ID.0 + 1,
             action_handlers: HashMap::new(),
+            custom_action_ids: CustomActionIds::default(),
             messages: VecDeque::new(),
         }
     }
@@ -59,6 +65,7 @@ impl<M> Molerat<M> {
             &mut self.node_ids,
             &mut self.next_node_id,
             &mut action_handlers,
+            &mut self.custom_action_ids,
         );
         build(&mut ui);
         let update = ui.finish();
@@ -72,10 +79,10 @@ impl<M> Molerat<M> {
             return false;
         }
 
-        let Some(handler) = self
-            .action_handlers
-            .get(&(request.target_node, request.action))
-        else {
+        let Some(route) = ActionRoute::from_request(&request) else {
+            return false;
+        };
+        let Some(handler) = self.action_handlers.get(&route) else {
             return false;
         };
         self.messages.push_back(handler.call(&request));
@@ -109,6 +116,8 @@ pub struct Ui<'a, M = ()> {
     focus: Option<NodeId>,
     /// Message handlers for actions supported by nodes in this publication.
     action_handlers: &'a mut ActionHandlers<M>,
+    /// Stable numeric IDs assigned to application-defined custom-action keys.
+    custom_action_ids: &'a mut CustomActionIds,
 }
 
 impl<'a, M> Ui<'a, M> {
@@ -118,6 +127,7 @@ impl<'a, M> Ui<'a, M> {
         node_ids: &'a mut HashMap<Vec<String>, NodeId>,
         next_node_id: &'a mut u64,
         action_handlers: &'a mut ActionHandlers<M>,
+        custom_action_ids: &'a mut CustomActionIds,
     ) -> Self {
         Self {
             application_name,
@@ -129,6 +139,7 @@ impl<'a, M> Ui<'a, M> {
             path: Vec::new(),
             focus: None,
             action_handlers,
+            custom_action_ids,
         }
     }
 
@@ -266,10 +277,20 @@ impl<'a, M> Ui<'a, M> {
 
     /// Returns a configurable node builder for the node at `node_index`.
     fn node_builder(&mut self, node_index: usize) -> Node<'_, M> {
-        let (nodes, focus, action_handlers) =
-            (&mut self.nodes, &mut self.focus, &mut self.action_handlers);
+        let (nodes, focus, action_handlers, custom_action_ids) = (
+            &mut self.nodes,
+            &mut self.focus,
+            &mut self.action_handlers,
+            &mut self.custom_action_ids,
+        );
         let id = nodes[node_index].0;
-        Node::new(id, &mut nodes[node_index].1, focus, action_handlers)
+        Node::new(
+            id,
+            &mut nodes[node_index].1,
+            focus,
+            action_handlers,
+            custom_action_ids,
+        )
     }
 
     /// Finishes the builder and returns the complete AccessKit tree update.

@@ -1,5 +1,7 @@
-use crate::action::{ActionHandler, ActionHandlers};
-use accesskit::{Action, ActionRequest, Node as AccessNode, NodeId, Toggled};
+use crate::action::{ActionHandler, ActionHandlers, ActionRoute, CustomActionIds};
+use accesskit::{
+    Action, ActionRequest, CustomAction as AccessCustomAction, Node as AccessNode, NodeId, Toggled,
+};
 
 /// Configures a node added to a semantic tree.
 #[derive(Debug)]
@@ -12,6 +14,8 @@ pub struct Node<'a, M = ()> {
     focus: &'a mut Option<NodeId>,
     /// Application message handlers for actions supported by the node.
     action_handlers: &'a mut ActionHandlers<M>,
+    /// Stable numeric IDs for application-defined custom actions.
+    custom_action_ids: &'a mut CustomActionIds,
 }
 
 impl<'a, M> Node<'a, M> {
@@ -21,12 +25,14 @@ impl<'a, M> Node<'a, M> {
         inner: &'a mut AccessNode,
         focus: &'a mut Option<NodeId>,
         action_handlers: &'a mut ActionHandlers<M>,
+        custom_action_ids: &'a mut CustomActionIds,
     ) -> Self {
         Self {
             id,
             inner,
             focus,
             action_handlers,
+            custom_action_ids,
         }
     }
 
@@ -119,9 +125,40 @@ impl<'a, M> Node<'a, M> {
         action: Action,
         handler: impl Fn(&ActionRequest) -> M + 'static,
     ) -> Self {
+        assert!(
+            action != Action::CustomAction,
+            "use Node::custom_action to register custom actions"
+        );
         self.inner.add_action(action);
-        self.action_handlers
-            .insert((self.id, action), ActionHandler::new(handler));
+        self.action_handlers.insert(
+            ActionRoute::Standard {
+                node: self.id,
+                action,
+            },
+            ActionHandler::new(handler),
+        );
+        self
+    }
+
+    /// Registers an application-defined action supported by this node.
+    ///
+    /// `key` preserves the action's numeric AccessKit ID across publications, `description` is
+    /// exposed to consumers, and `handler` maps requests for the action to application messages.
+    pub fn custom_action(
+        self,
+        key: impl Into<String>,
+        description: impl Into<String>,
+        handler: impl Fn(&ActionRequest) -> M + 'static,
+    ) -> Self {
+        let id = self.custom_action_ids.id_for(key);
+        self.inner.push_custom_action(AccessCustomAction {
+            id,
+            description: description.into(),
+        });
+        self.action_handlers.insert(
+            ActionRoute::Custom { node: self.id, id },
+            ActionHandler::new(handler),
+        );
         self
     }
 
