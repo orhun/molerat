@@ -1,20 +1,12 @@
 use accesskit::{Action, ActionData, ActionRequest, NodeId};
 use std::{collections::HashMap, fmt};
 
-/// Routes supported actions to their application message handlers.
-///
-/// A route is identified by an [`ActionRoute`]. The map is rebuilt whenever the semantic tree is
-/// published so it contains only routes advertised by the current tree.
-///
-/// Each entry contains:
-///
-/// - [`ActionRoute`]: the target node plus either a standard action or custom-action ID.
-/// - [`ActionHandler<M>`]: the callback that produces the application's message type `M`.
-pub(crate) type ActionHandlers<M> = HashMap<ActionRoute, ActionHandler<M>>;
+/// Converts an AccessKit action request into an application-defined message of type `M`.
+type ActionHandler<M> = Box<dyn Fn(&ActionRequest) -> M>;
 
 /// Identifies an action handler for a semantic node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum ActionRoute {
+enum ActionRoute {
     /// A standard AccessKit action supported by a node.
     Standard {
         /// The stable semantic node receiving the action.
@@ -31,84 +23,102 @@ pub(crate) enum ActionRoute {
     },
 }
 
-impl ActionRoute {
-    /// Resolves the handler route described by an AccessKit request.
-    pub(crate) fn from_request(request: &ActionRequest) -> Option<Self> {
-        if request.action == Action::CustomAction {
+/// Registers supported actions and routes their requests to application messages.
+pub(crate) struct Actions<M> {
+    /// Message handlers indexed by target node and action.
+    handlers: HashMap<ActionRoute, ActionHandler<M>>,
+    /// Stable numeric AccessKit IDs indexed by application-defined string keys.
+    custom_ids: HashMap<String, i32>,
+}
+
+impl<M> Actions<M> {
+    /// Removes handlers advertised by the previous semantic tree.
+    pub(crate) fn clear(&mut self) {
+        self.handlers.clear();
+    }
+
+    /// Registers a standard action for a semantic node.
+    pub(crate) fn register(
+        &mut self,
+        node: NodeId,
+        action: Action,
+        handler: impl Fn(&ActionRequest) -> M + 'static,
+    ) {
+        assert!(
+            action != Action::CustomAction,
+            "use Node::custom_action to register custom actions"
+        );
+        self.handlers
+            .insert(ActionRoute::Standard { node, action }, Box::new(handler));
+    }
+
+    /// Registers a custom action and returns its stable numeric AccessKit ID.
+    pub(crate) fn register_custom(
+        &mut self,
+        node: NodeId,
+        key: impl Into<String>,
+        handler: impl Fn() -> M + 'static,
+    ) -> i32 {
+        let key = key.into();
+        let id = self.custom_id(key.clone());
+        let route = ActionRoute::Custom { node, id };
+        assert!(
+            !self.handlers.contains_key(&route),
+            "custom action key {key:?} registered more than once on node {node:?}"
+        );
+        self.handlers.insert(route, Box::new(move |_| handler()));
+        id
+    }
+
+    /// Converts a supported action request into an application message.
+    pub(crate) fn handle(&self, request: &ActionRequest) -> Option<M> {
+        let route = if request.action == Action::CustomAction {
             let Some(ActionData::CustomAction(id)) = request.data.as_ref() else {
                 return None;
             };
-            return Some(Self::Custom {
+            ActionRoute::Custom {
                 node: request.target_node,
                 id: *id,
-            });
-        }
-
-        Some(Self::Standard {
-            node: request.target_node,
-            action: request.action,
-        })
+            }
+        } else {
+            ActionRoute::Standard {
+                node: request.target_node,
+                action: request.action,
+            }
+        };
+        self.handlers.get(&route).map(|handler| handler(request))
     }
-}
 
-/// Assigns stable numeric AccessKit IDs to application-defined custom-action keys.
-#[derive(Debug, Default)]
-pub(crate) struct CustomActionIds {
-    /// Numeric IDs indexed by application-provided string keys.
-    ids: HashMap<String, i32>,
-    /// The next numeric ID available for allocation.
-    next_id: i32,
-}
-
-impl CustomActionIds {
-    /// Returns the stable numeric ID for `key`, allocating it when first seen.
-    pub(crate) fn id_for(&mut self, key: impl Into<String>) -> i32 {
-        let key = key.into();
-        if let Some(id) = self.ids.get(&key) {
+    /// Returns the numeric ID for a custom-action key, allocating it when first seen.
+    fn custom_id(&mut self, key: String) -> i32 {
+        if let Some(id) = self.custom_ids.get(&key) {
             return *id;
         }
 
-        let id = self.next_id;
-        let Some(next_id) = self.next_id.checked_add(1) else {
+        let Ok(id) = i32::try_from(self.custom_ids.len()) else {
             panic!("custom action ID space exhausted");
         };
-        self.next_id = next_id;
-        self.ids.insert(key, id);
+        self.custom_ids.insert(key, id);
         id
     }
 }
 
-/// Converts an AccessKit action request into an application-defined message of type `M`.
-///
-/// The callback is boxed to erase the concrete closure type, allowing different nodes and actions
-/// to capture different values while being stored in the same [`ActionHandlers`] map. It receives
-/// the complete request so handlers can use action-specific data such as a replacement value.
-///
-/// The callback parameters are:
-///
-/// - `&ActionRequest`: the requested action, target tree, target node, and optional action data.
-/// - `M`: the application-defined message returned to its update loop.
-pub(crate) struct ActionHandler<M> {
-    callback: Box<dyn Fn(&ActionRequest) -> M>,
-}
-
-impl<M> ActionHandler<M> {
-    /// Creates an action handler from an application callback.
-    pub(crate) fn new(callback: impl Fn(&ActionRequest) -> M + 'static) -> Self {
+impl<M> Default for Actions<M> {
+    fn default() -> Self {
         Self {
-            callback: Box::new(callback),
+            handlers: HashMap::new(),
+            custom_ids: HashMap::new(),
         }
     }
-
-    /// Converts an action request into an application message.
-    pub(crate) fn call(&self, request: &ActionRequest) -> M {
-        (self.callback)(request)
-    }
 }
 
-impl<M> fmt::Debug for ActionHandler<M> {
+impl<M> fmt::Debug for Actions<M> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("ActionHandler")
+        formatter
+            .debug_struct("Actions")
+            .field("handler_count", &self.handlers.len())
+            .field("custom_ids", &self.custom_ids)
+            .finish()
     }
 }
 
@@ -159,10 +169,10 @@ mod tests {
         let mut molerat = Molerat::<Message>::new("example");
         molerat.publish(|ui| {
             ui.list_item("key", "Alice's key")
-                .custom_action("copy-fingerprint", "Copy fingerprint", |_| {
+                .custom_action("copy-fingerprint", "Copy fingerprint", || {
                     Message::CopyFingerprint
                 })
-                .custom_action("export", "Export public key", |_| Message::Export);
+                .custom_action("export", "Export public key", || Message::Export);
         });
 
         let Some(update) = molerat.last_update() else {
@@ -192,8 +202,8 @@ mod tests {
 
         molerat.publish(|ui| {
             ui.list_item("key", "Alice's key")
-                .custom_action("export", "Export public key", |_| Message::Export)
-                .custom_action("copy-fingerprint", "Copy fingerprint", |_| {
+                .custom_action("export", "Export public key", || Message::Export)
+                .custom_action("copy-fingerprint", "Copy fingerprint", || {
                     Message::CopyFingerprint
                 });
         });
@@ -205,5 +215,17 @@ mod tests {
         };
         assert_eq!(copy.id, copy_id);
         assert_eq!(export.id, export_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "registered more than once")]
+    fn rejects_duplicate_custom_action_keys_on_a_node() {
+        let mut molerat: Molerat = Molerat::new("example");
+
+        molerat.publish(|ui| {
+            ui.button("save", "Save")
+                .custom_action("copy", "Copy one", || ())
+                .custom_action("copy", "Copy two", || ());
+        });
     }
 }

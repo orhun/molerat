@@ -1,7 +1,4 @@
-use crate::{
-    action::{ActionHandlers, ActionRoute, CustomActionIds},
-    node::Node,
-};
+use crate::{action::Actions, node::Node};
 use accesskit::{ActionRequest, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate};
 use std::collections::{HashMap, VecDeque};
 
@@ -19,10 +16,8 @@ pub struct Molerat<M = ()> {
     node_ids: HashMap<Vec<String>, NodeId>,
     /// The next AccessKit node ID available for allocation.
     next_node_id: u64,
-    /// Message handlers for the actions supported by the current tree.
-    action_handlers: ActionHandlers<M>,
-    /// Stable numeric IDs assigned to application-defined custom-action keys.
-    custom_action_ids: CustomActionIds,
+    /// Registry for actions supported by the current semantic tree.
+    actions: Actions<M>,
     /// Messages produced by handled action requests.
     messages: VecDeque<M>,
 }
@@ -35,8 +30,7 @@ impl<M> Molerat<M> {
             last_update: None,
             node_ids: HashMap::new(),
             next_node_id: ROOT_ID.0 + 1,
-            action_handlers: HashMap::new(),
-            custom_action_ids: CustomActionIds::default(),
+            actions: Actions::default(),
             messages: VecDeque::new(),
         }
     }
@@ -48,7 +42,7 @@ impl<M> Molerat<M> {
 
     /// Publishes an AccessKit tree update.
     pub fn update(&mut self, update: TreeUpdate) {
-        self.action_handlers.clear();
+        self.actions.clear();
         self.last_update = Some(update);
     }
 
@@ -59,17 +53,15 @@ impl<M> Molerat<M> {
 
     /// Builds and publishes a complete semantic tree.
     pub fn publish(&mut self, build: impl FnOnce(&mut Ui<'_, M>)) {
-        let mut action_handlers = HashMap::new();
+        self.actions.clear();
         let mut ui = Ui::new(
             &self.name,
             &mut self.node_ids,
             &mut self.next_node_id,
-            &mut action_handlers,
-            &mut self.custom_action_ids,
+            &mut self.actions,
         );
         build(&mut ui);
         let update = ui.finish();
-        self.action_handlers = action_handlers;
         self.last_update = Some(update);
     }
 
@@ -79,13 +71,10 @@ impl<M> Molerat<M> {
             return false;
         }
 
-        let Some(route) = ActionRoute::from_request(&request) else {
+        let Some(message) = self.actions.handle(&request) else {
             return false;
         };
-        let Some(handler) = self.action_handlers.get(&route) else {
-            return false;
-        };
-        self.messages.push_back(handler.call(&request));
+        self.messages.push_back(message);
         true
     }
 
@@ -98,26 +87,20 @@ impl<M> Molerat<M> {
 /// Builds one complete semantic representation of an application.
 #[derive(Debug)]
 pub struct Ui<'a, M = ()> {
-    /// The application name used to label the root node.
-    application_name: &'a str,
     /// Stable AccessKit node IDs indexed by hierarchical application-provided keys.
     node_ids: &'a mut HashMap<Vec<String>, NodeId>,
     /// The next AccessKit node ID available for allocation.
     next_node_id: &'a mut u64,
     /// Nodes added during this publication.
     nodes: Vec<(NodeId, AccessNode)>,
-    /// Direct children of the application root.
-    root_children: Vec<NodeId>,
     /// Indices of the containers that currently receive child nodes.
     parent_nodes: Vec<usize>,
     /// Key segments identifying the current container path.
     path: Vec<String>,
     /// The node selected as semantic focus in this publication.
     focus: Option<NodeId>,
-    /// Message handlers for actions supported by nodes in this publication.
-    action_handlers: &'a mut ActionHandlers<M>,
-    /// Stable numeric IDs assigned to application-defined custom-action keys.
-    custom_action_ids: &'a mut CustomActionIds,
+    /// Registry for actions supported by nodes in this publication.
+    actions: &'a mut Actions<M>,
 }
 
 impl<'a, M> Ui<'a, M> {
@@ -126,20 +109,18 @@ impl<'a, M> Ui<'a, M> {
         application_name: &'a str,
         node_ids: &'a mut HashMap<Vec<String>, NodeId>,
         next_node_id: &'a mut u64,
-        action_handlers: &'a mut ActionHandlers<M>,
-        custom_action_ids: &'a mut CustomActionIds,
+        actions: &'a mut Actions<M>,
     ) -> Self {
+        let mut root = AccessNode::new(Role::Application);
+        root.set_label(application_name);
         Self {
-            application_name,
             node_ids,
             next_node_id,
-            nodes: Vec::new(),
-            root_children: Vec::new(),
-            parent_nodes: Vec::new(),
+            nodes: vec![(ROOT_ID, root)],
+            parent_nodes: vec![0],
             path: Vec::new(),
             focus: None,
-            action_handlers,
-            custom_action_ids,
+            actions,
         }
     }
 
@@ -253,11 +234,10 @@ impl<'a, M> Ui<'a, M> {
         let id = self.node_id(path);
         let node_index = self.nodes.len();
 
-        if let Some(parent_index) = self.parent_nodes.last().copied() {
-            self.nodes[parent_index].1.push_child(id);
-        } else {
-            self.root_children.push(id);
-        }
+        let Some(parent_index) = self.parent_nodes.last().copied() else {
+            unreachable!("the application root is always a semantic parent");
+        };
+        self.nodes[parent_index].1.push_child(id);
         self.nodes.push((id, AccessNode::new(role)));
 
         node_index
@@ -277,29 +257,13 @@ impl<'a, M> Ui<'a, M> {
 
     /// Returns a configurable node builder for the node at `node_index`.
     fn node_builder(&mut self, node_index: usize) -> Node<'_, M> {
-        let (nodes, focus, action_handlers, custom_action_ids) = (
-            &mut self.nodes,
-            &mut self.focus,
-            &mut self.action_handlers,
-            &mut self.custom_action_ids,
-        );
+        let (nodes, focus, actions) = (&mut self.nodes, &mut self.focus, &mut self.actions);
         let id = nodes[node_index].0;
-        Node::new(
-            id,
-            &mut nodes[node_index].1,
-            focus,
-            action_handlers,
-            custom_action_ids,
-        )
+        Node::new(id, &mut nodes[node_index].1, focus, actions)
     }
 
     /// Finishes the builder and returns the complete AccessKit tree update.
-    fn finish(mut self) -> TreeUpdate {
-        let mut root = AccessNode::new(Role::Application);
-        root.set_label(self.application_name);
-        root.set_children(self.root_children);
-        self.nodes.insert(0, (ROOT_ID, root));
-
+    fn finish(self) -> TreeUpdate {
         TreeUpdate {
             nodes: self.nodes,
             tree: Some(TreeInfo::new(ROOT_ID)),

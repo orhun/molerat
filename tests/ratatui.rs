@@ -8,9 +8,9 @@ use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Block, List, ListItem, ListState, Paragraph},
 };
-use std::error::Error;
+use std::convert::Infallible;
 
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = Result<(), Infallible>;
 
 #[derive(Debug, PartialEq, Eq)]
 enum Message {
