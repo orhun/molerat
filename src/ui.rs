@@ -27,13 +27,6 @@ impl<M> Molerat<M> {
     }
 }
 
-impl Molerat {
-    /// Creates an integration handle that only exposes application state.
-    pub fn read_only(name: impl Into<String>) -> Self {
-        Self::new(name)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,8 +41,8 @@ mod tests {
     }
 
     #[test]
-    fn creates_read_only_instance() {
-        let molerat = Molerat::read_only("example");
+    fn uses_unit_as_the_default_message_type() {
+        let molerat: Molerat = Molerat::new("example");
 
         assert_eq!(molerat.name(), "example");
     }
