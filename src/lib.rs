@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+mod node;
 mod ui;
 
 #[cfg(feature = "atspi")]
@@ -15,4 +16,5 @@ mod mcp;
 /// convenience.
 pub use accesskit;
 
-pub use ui::Molerat;
+pub use node::Paragraph;
+pub use ui::{Molerat, Ui};
