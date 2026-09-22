@@ -1,6 +1,8 @@
 use super::{action::Actions, node::Node};
 #[cfg(feature = "atspi")]
 use crate::atspi::Atspi;
+#[cfg(feature = "mcp")]
+use crate::mcp::Endpoint;
 use accesskit::{
     ActionRequest, Live, Node as AccessNode, NodeId, Role, TreeId, TreeInfo, TreeUpdate,
 };
@@ -27,6 +29,9 @@ pub struct Molerat<M = ()> {
     /// Optional connection to the Unix AT-SPI accessibility bus.
     #[cfg(feature = "atspi")]
     atspi: Option<Atspi>,
+    /// Optional local endpoint serving semantic snapshots to the MCP facade.
+    #[cfg(feature = "mcp")]
+    mcp: Option<Endpoint>,
 }
 
 impl<M> Molerat<M> {
@@ -50,7 +55,34 @@ impl<M> Molerat<M> {
             messages: VecDeque::new(),
             #[cfg(feature = "atspi")]
             atspi: None,
+            #[cfg(feature = "mcp")]
+            mcp: None,
         }
+    }
+
+    /// Creates an integration handle with MCP exposure enabled.
+    ///
+    /// The handle automatically maintains a private local endpoint for the bundled `molerat-mcp`
+    /// stdio server. No async runtime or transport setup is required in the application.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use molerat::Molerat;
+    ///
+    /// # fn main() -> std::io::Result<()> {
+    /// let mut molerat = Molerat::<()>::new_mcp("Tasks")?;
+    /// molerat.publish(|ui| {
+    ///     ui.status("status", "Ready");
+    /// });
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "mcp")]
+    pub fn new_mcp(name: impl Into<String>) -> std::io::Result<Self> {
+        let mut molerat = Self::new(name);
+        molerat.mcp = Some(Endpoint::spawn(&molerat.name)?);
+        Ok(molerat)
     }
 
     /// Creates an integration handle with Unix AT-SPI exposure enabled.
@@ -246,6 +278,10 @@ impl<M> Molerat<M> {
 
     /// Stores an update and forwards it to active consumers.
     fn store_update(&mut self, update: TreeUpdate) {
+        #[cfg(feature = "mcp")]
+        if let Some(mcp) = &self.mcp {
+            mcp.update(&update);
+        }
         #[cfg(feature = "atspi")]
         if let Some(atspi) = &mut self.atspi {
             atspi.update(&update);

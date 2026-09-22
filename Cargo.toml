@@ -7,14 +7,37 @@ edition = "2024"
 [features]
 default = []
 atspi = ["dep:accesskit_unix"]
-mcp = []
+mcp = [
+    "dep:dirs",
+    "dep:ipc-rpc",
+    "dep:rmcp",
+    "dep:schemars",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:tokio",
+]
 
 [dependencies]
+# Core
 accesskit = "0.25.0"
+# AT-SPI via AccessKit: https://docs.rs/accesskit_unix
 accesskit_unix = { version = "0.23.0", optional = true }
+# MCP via the official Rust SDK: https://docs.rs/rmcp
+dirs = { version = "7.0.0", optional = true }
+ipc-rpc = { version = "3.0.1", optional = true }
+rmcp = { version = "3.4.0", optional = true, default-features = false, features = ["macros", "server", "transport-io"] }
+schemars = { version = "1.2.2", optional = true }
+serde = { version = "1.0.228", optional = true, features = ["derive"] }
+serde_json = { version = "1.0.145", optional = true }
+tokio = { version = "1.47.1", optional = true, features = ["io-std", "macros", "rt-multi-thread", "sync", "time"] }
 
 [dev-dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "std"] }
+
+[[bin]]
+name = "molerat-mcp"
+path = "src/bin/molerat-mcp.rs"
+required-features = ["mcp"]
 
 [[example]]
 name = "ratatui-recipe-atspi"
@@ -23,3 +46,7 @@ required-features = ["atspi"]
 [[example]]
 name = "ratatui-dashboard-atspi"
 required-features = ["atspi"]
+
+[[example]]
+name = "ratatui-agent-mcp"
+required-features = ["mcp"]

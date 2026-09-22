@@ -15,3 +15,5 @@ mod mcp;
 pub use accesskit;
 
 pub use core::{Molerat, Node, Ui};
+#[cfg(feature = "mcp")]
+pub use mcp::Server;
