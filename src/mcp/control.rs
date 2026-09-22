@@ -1,5 +1,5 @@
 use super::snapshot::{Snapshot, Store};
-use accesskit::TreeUpdate;
+use accesskit::{ActionRequest as AccessActionRequest, TreeUpdate};
 use ipc_rpc::{ConnectionKey, IpcRpcClient, IpcRpcServer};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -40,12 +40,17 @@ enum Message {
     /// The snapshot is encoded as JSON because `ipc-rpc`'s positional binary format does not
     /// support the optional fields omitted by [`Snapshot`] during serialization.
     SnapshotResponse(Result<String, String>),
+    /// Requests that the application perform a semantic action.
+    ActionRequest(AccessActionRequest),
+    /// Reports whether an action was validated and dispatched to the application thread.
+    ActionResponse(Result<(), String>),
 }
 
 /// Application-side endpoint serving the current semantic snapshot.
 #[derive(Debug)]
 pub(crate) struct Endpoint {
     store: Store,
+    action_requests: mpsc::Receiver<AccessActionRequest>,
     shutdown: Option<oneshot::Sender<()>>,
     worker: Option<JoinHandle<()>>,
     path: PathBuf,
@@ -62,14 +67,20 @@ impl Endpoint {
     pub(super) fn spawn_at(application: &str, path: PathBuf) -> io::Result<Self> {
         let store = Store::new(application);
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+        let (action_sender, action_requests) = mpsc::channel();
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let worker_store = store.clone();
         let worker_path = path.clone();
         let worker = thread::Builder::new()
             .name("molerat-ipc".into())
             .spawn(move || {
-                if let Err(error) = run_endpoint(worker_store, worker_path, &ready_tx, shutdown_rx)
-                {
+                if let Err(error) = run_endpoint(
+                    worker_store,
+                    worker_path,
+                    action_sender,
+                    &ready_tx,
+                    shutdown_rx,
+                ) {
                     let _ = ready_tx.send(Err(error));
                 }
             })?;
@@ -86,6 +97,7 @@ impl Endpoint {
 
         Ok(Self {
             store,
+            action_requests,
             shutdown: Some(shutdown_tx),
             worker: Some(worker),
             path,
@@ -97,12 +109,18 @@ impl Endpoint {
     pub(crate) fn update(&self, update: &TreeUpdate) {
         self.store.update(update);
     }
+
+    /// Drains semantic actions waiting to be handled on the application thread.
+    pub(crate) fn drain_actions(&self) -> Vec<AccessActionRequest> {
+        self.action_requests.try_iter().collect()
+    }
 }
 
 /// Runs the IPC server until the application endpoint is dropped.
 fn run_endpoint(
     store: Store,
     path: PathBuf,
+    action_sender: mpsc::Sender<AccessActionRequest>,
     ready: &mpsc::SyncSender<io::Result<ConnectionKey>>,
     shutdown: oneshot::Receiver<()>,
 ) -> io::Result<()> {
@@ -110,12 +128,30 @@ fn run_endpoint(
     runtime.block_on(async move {
         let (key, server) = IpcRpcServer::initialize_server(move |message| {
             let store = store.clone();
+            let action_sender = action_sender.clone();
             async move {
                 match message {
                     Message::SnapshotRequest => Some(Message::SnapshotResponse(
                         serde_json::to_string(&store.snapshot()).map_err(|error| error.to_string()),
                     )),
-                    Message::SnapshotResponse(_) => None,
+                    Message::ActionRequest(request) => {
+                        let result = store
+                            .supports_action(&request)
+                            .then_some(())
+                            .ok_or_else(|| {
+                                format!(
+                                    "action {:?} is not available on node {}",
+                                    request.action, request.target_node.0
+                                )
+                            })
+                            .and_then(|()| {
+                                action_sender.send(request).map_err(|_| {
+                                    "application action receiver is unavailable".to_owned()
+                                })
+                            });
+                        Some(Message::ActionResponse(result))
+                    }
+                    Message::SnapshotResponse(_) | Message::ActionResponse(_) => None,
                 }
             }
         })
@@ -231,6 +267,28 @@ impl Client {
 
     /// Fetches the latest semantic snapshot from the live application.
     pub(super) async fn snapshot(&self) -> io::Result<Snapshot> {
+        match self.send(Message::SnapshotRequest).await? {
+            Message::SnapshotResponse(Ok(snapshot)) => serde_json::from_str(&snapshot)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error)),
+            Message::SnapshotResponse(Err(error)) => Err(io::Error::other(error)),
+            _ => Err(io::Error::other(
+                "Molerat returned an unexpected IPC response",
+            )),
+        }
+    }
+
+    /// Dispatches a semantic action to the live application.
+    pub(super) async fn perform_action(&self, request: AccessActionRequest) -> io::Result<()> {
+        match self.send(Message::ActionRequest(request)).await? {
+            Message::ActionResponse(result) => result.map_err(io::Error::other),
+            _ => Err(io::Error::other(
+                "Molerat returned an unexpected IPC response",
+            )),
+        }
+    }
+
+    /// Sends one request over a cached connection to the application endpoint.
+    async fn send(&self, message: Message) -> io::Result<Message> {
         let key = fs::read_to_string(&self.path).map_err(|error| {
             io::Error::new(
                 error.kind(),
@@ -263,7 +321,7 @@ impl Client {
         }
 
         let result = match connection.as_ref() {
-            Some(connection) => connection.client.send(Message::SnapshotRequest).await,
+            Some(connection) => connection.client.send(message).await,
             None => {
                 return Err(io::Error::other(
                     "Molerat IPC connection was not initialized",
@@ -271,12 +329,7 @@ impl Client {
             }
         };
         match result {
-            Ok(Message::SnapshotResponse(Ok(snapshot))) => serde_json::from_str(&snapshot)
-                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error)),
-            Ok(Message::SnapshotResponse(Err(error))) => Err(io::Error::other(error)),
-            Ok(Message::SnapshotRequest) => Err(io::Error::other(
-                "Molerat returned an unexpected IPC response",
-            )),
+            Ok(response) => Ok(response),
             Err(error) => {
                 *connection = None;
                 Err(io::Error::other(error))

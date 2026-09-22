@@ -4,7 +4,7 @@ use molerat::Molerat;
 use ratatui::{
     DefaultTerminal, Frame,
     crossterm::event::{self, Event, KeyCode},
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout},
     style::{Style, Stylize},
     text::Line,
     widgets::{Block, BorderType, Gauge, List, ListState, Padding, Paragraph, Wrap},
@@ -40,6 +40,11 @@ const TASKS: &[Task] = &[
     },
 ];
 
+#[derive(Debug)]
+enum Message {
+    Select(usize),
+}
+
 #[derive(Debug, Default)]
 struct App {
     selected: usize,
@@ -57,23 +62,14 @@ impl App {
         let [main_area, progress_area, key_bindings_area] = frame.area().layout(&vertical);
         let [tasks_area, details_area] = main_area.layout(&horizontal);
 
-        self.render_tasks(frame, tasks_area);
-        self.render_details(frame, details_area);
-        self.render_progress(frame, progress_area);
-        self.render_key_bindings(frame, key_bindings_area);
-    }
-
-    fn render_tasks(&self, frame: &mut Frame<'_>, area: Rect) {
         let tasks = List::new(TASKS.iter().map(|task| task.title))
             .block(panel(" Agent queue ").padding(Padding::horizontal(1)))
             .white()
             .highlight_style(Style::new().yellow().bold())
             .highlight_symbol("▸ ");
         let mut state = ListState::default().with_selected(Some(self.selected));
-        frame.render_stateful_widget(tasks, area, &mut state);
-    }
+        frame.render_stateful_widget(tasks, tasks_area, &mut state);
 
-    fn render_details(&self, frame: &mut Frame<'_>, area: Rect) {
         let task = &TASKS[self.selected];
         let details = Paragraph::new(vec![
             task.title.green().into(),
@@ -84,27 +80,22 @@ impl App {
         ])
         .block(panel(" Task details ").padding(Padding::horizontal(1)))
         .wrap(Wrap { trim: true });
-        frame.render_widget(details, area);
-    }
+        frame.render_widget(details, details_area);
 
-    fn render_progress(&self, frame: &mut Frame<'_>, area: Rect) {
-        let task = &TASKS[self.selected];
         let progress = Gauge::default()
             .block(panel(" Progress "))
             .gauge_style(Style::new().light_green().on_black().bold())
             .label(format!("{}: {}%", task.title, task.progress))
             .percent(task.progress);
-        frame.render_widget(progress, area);
-    }
+        frame.render_widget(progress, progress_area);
 
-    fn render_key_bindings(&self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(
             Line::from("j/k or arrows: select • q: quit".dark_gray()).centered(),
-            area,
+            key_bindings_area,
         );
     }
 
-    fn publish(&self, molerat: &mut Molerat) {
+    fn publish(&self, molerat: &mut Molerat<Message>) {
         molerat.publish(|ui| {
             ui.list_box("tasks", "Agent task queue", |ui| {
                 for (index, task) in TASKS.iter().enumerate() {
@@ -114,7 +105,9 @@ impl App {
                             task.description, task.progress
                         ))
                         .selected(index == self.selected)
-                        .focused(index == self.selected);
+                        .focused(index == self.selected)
+                        .on_focus(move || Message::Select(index))
+                        .on_click(move || Message::Select(index));
                 }
             });
             let task = &TASKS[self.selected];
@@ -145,16 +138,17 @@ fn panel(title: &'static str) -> Block<'static> {
 
 fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
     let mut app = App::default();
-    let mut molerat = Molerat::<()>::new_mcp("Agent task dashboard")?;
+    let mut molerat = Molerat::<Message>::new_mcp("Agent task dashboard")?;
     app.publish(&mut molerat);
 
     loop {
         terminal.draw(|frame| app.render(frame))?;
+        let mut changed = false;
         if event::poll(Duration::from_millis(100))?
             && let Event::Key(key) = event::read()?
             && key.is_press()
         {
-            let changed = match key.code {
+            changed = match key.code {
                 KeyCode::Char('j') | KeyCode::Down => {
                     app.selected = (app.selected + 1) % TASKS.len();
                     true
@@ -166,9 +160,13 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                 KeyCode::Char('q') | KeyCode::Esc => break,
                 _ => false,
             };
-            if changed {
-                app.publish(&mut molerat);
-            }
+        }
+        for Message::Select(index) in molerat.messages() {
+            app.selected = index;
+            changed = true;
+        }
+        if changed {
+            app.publish(&mut molerat);
         }
     }
 

@@ -63,7 +63,8 @@ impl<M> Molerat<M> {
     /// Creates an integration handle with MCP exposure enabled.
     ///
     /// The handle automatically maintains a private local endpoint for the bundled `molerat-mcp`
-    /// stdio server. No async runtime or transport setup is required in the application.
+    /// stdio server. No async runtime or transport setup is required in the application. Poll
+    /// [`Molerat::messages`] from the event loop to handle actions requested by agents.
     ///
     /// # Examples
     ///
@@ -237,8 +238,8 @@ impl<M> Molerat<M> {
 
     /// Drains the application messages produced by handled action requests.
     ///
-    /// When constructed with `Molerat::new_atspi`, pending platform action requests are handled
-    /// before messages are drained. This keeps application action handlers on the TUI thread.
+    /// Pending AT-SPI and MCP action requests are handled before messages are drained. This keeps
+    /// application action handlers on the TUI thread.
     ///
     /// # Examples
     ///
@@ -269,6 +270,16 @@ impl<M> Molerat<M> {
                 .atspi
                 .as_ref()
                 .map_or_else(Vec::new, Atspi::drain_actions);
+            for request in requests {
+                self.handle_action(request);
+            }
+        }
+        #[cfg(feature = "mcp")]
+        {
+            let requests = self
+                .mcp
+                .as_ref()
+                .map_or_else(Vec::new, Endpoint::drain_actions);
             for request in requests {
                 self.handle_action(request);
             }

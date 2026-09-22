@@ -34,6 +34,8 @@ tokio = { version = "1.47.1", optional = true, features = ["io-std", "macros", "
 
 [dev-dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "std"] }
+ratatui-textarea = "0.9.2"
+rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
 
 [[bin]]
 name = "molerat-mcp"
@@ -50,4 +52,12 @@ required-features = ["atspi"]
 
 [[example]]
 name = "ratatui-recipe-mcp"
+required-features = ["mcp"]
+
+[[example]]
+name = "ratatui-sqlite-mcp"
+required-features = ["mcp"]
+
+[[example]]
+name = "ratatui-paint-mcp"
 required-features = ["mcp"]
