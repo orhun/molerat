@@ -1,10 +1,35 @@
-use accesskit::{Node as AccessNode, NodeId, TreeUpdate};
+use accesskit::{Action, CustomAction, Node as AccessNode, NodeId, TreeUpdate};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
+
+/// Standard AccessKit actions that can be advertised independently of custom actions.
+const STANDARD_ACTIONS: &[Action] = &[
+    Action::Click,
+    Action::Focus,
+    Action::Blur,
+    Action::Collapse,
+    Action::Expand,
+    Action::Decrement,
+    Action::Increment,
+    Action::HideTooltip,
+    Action::ShowTooltip,
+    Action::ReplaceSelectedText,
+    Action::ScrollDown,
+    Action::ScrollLeft,
+    Action::ScrollRight,
+    Action::ScrollUp,
+    Action::ScrollIntoView,
+    Action::ScrollToPoint,
+    Action::SetScrollOffset,
+    Action::SetTextSelection,
+    Action::SetSequentialFocusNavigationStartingPoint,
+    Action::SetValue,
+    Action::ShowContextMenu,
+];
 
 /// Thread-safe semantic tree storage shared with the local control endpoint.
 #[derive(Clone, Debug)]
@@ -94,6 +119,10 @@ pub(super) struct Node {
     #[serde(skip_serializing_if = "Option::is_none")]
     max_numeric_value: Option<f64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    actions: Vec<Action>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    custom_actions: Vec<CustomAction>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) children: Vec<Self>,
 }
 
@@ -116,6 +145,12 @@ impl Node {
             numeric_value: node.numeric_value(),
             min_numeric_value: node.min_numeric_value(),
             max_numeric_value: node.max_numeric_value(),
+            actions: STANDARD_ACTIONS
+                .iter()
+                .copied()
+                .filter(|action| node.supports_action(*action))
+                .collect(),
+            custom_actions: node.custom_actions().to_vec(),
             children: node
                 .children()
                 .iter()
@@ -154,6 +189,42 @@ mod tests {
         };
         assert_eq!(root.children.len(), 1);
         assert_eq!(root.children[0].value.as_deref(), Some("Visible"));
+        Ok(())
+    }
+
+    #[test]
+    fn supported_actions_are_exposed() -> Result<(), Box<dyn std::error::Error>> {
+        let store = Store::new("Agent tasks");
+        let mut molerat = Molerat::<()>::new("Agent tasks");
+        molerat.publish(|ui| {
+            ui.button("run", "Run")
+                .on_click(|| ())
+                .on_focus(|| ())
+                .custom_action("retry", "Retry task", || ());
+        });
+        let Some(update) = molerat.last_update() else {
+            return Err("publication did not produce an update".into());
+        };
+        store.update(update);
+
+        let snapshot = store.snapshot();
+        let json = serde_json::to_value(&snapshot)?;
+        assert_eq!(
+            json["root"]["children"][0]["actions"],
+            serde_json::json!(["click", "focus"])
+        );
+        assert_eq!(
+            json["root"]["children"][0]["customActions"][0]["description"].as_str(),
+            Some("Retry task")
+        );
+
+        let Some(root) = snapshot.root else {
+            return Err("published tree has no root".into());
+        };
+        let button = &root.children[0];
+        assert_eq!(button.actions, [Action::Click, Action::Focus]);
+        assert_eq!(button.custom_actions.len(), 1);
+        assert_eq!(button.custom_actions[0].description, "Retry task");
         Ok(())
     }
 }

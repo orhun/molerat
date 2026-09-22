@@ -40,7 +40,7 @@ impl Server {
 impl Server {
     #[tool(
         name = "get_ui",
-        description = "Get the current semantic state of the terminal user interface"
+        description = "Get the current semantic state and available actions of the terminal user interface"
     )]
     async fn get_ui(&self) -> Result<Json<Snapshot>, String> {
         self.client
@@ -57,8 +57,8 @@ impl ServerHandler for Server {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("molerat", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Inspect the current semantic state of the live terminal user interface with \
-                 get_ui.",
+                "Inspect the current semantic state and available actions of the live terminal \
+                 user interface with get_ui.",
             )
     }
 }

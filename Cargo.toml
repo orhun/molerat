@@ -8,6 +8,7 @@ edition = "2024"
 default = []
 atspi = ["dep:accesskit_unix"]
 mcp = [
+    "accesskit/schemars",
     "dep:dirs",
     "dep:ipc-rpc",
     "dep:rmcp",
