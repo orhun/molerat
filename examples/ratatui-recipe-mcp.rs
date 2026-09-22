@@ -1,4 +1,4 @@
-//! Agent task dashboard exposed over MCP through Molerat.
+//! Agent task recipe exposed over MCP through Molerat.
 
 use molerat::Molerat;
 use ratatui::{
@@ -21,22 +21,22 @@ const TASKS: &[Task] = &[
     Task {
         title: "Inspect the pantry",
         description: "Inventory the workspace and identify the relevant files.",
-        progress: 100,
+        progress: 25,
     },
     Task {
         title: "Chop the changes",
         description: "Make the smallest focused code changes for the task.",
-        progress: 70,
+        progress: 50,
     },
     Task {
         title: "Simmer the tests",
         description: "Run checks and resolve any failures.",
-        progress: 35,
+        progress: 75,
     },
     Task {
         title: "Plate the result",
         description: "Summarize the finished work for the user.",
-        progress: 0,
+        progress: 100,
     },
 ];
 
@@ -47,15 +47,20 @@ struct App {
 
 impl App {
     fn render(&self, frame: &mut Frame<'_>) {
-        let vertical = Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]);
+        let vertical = Layout::vertical([
+            Constraint::Fill(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+        ]);
         let horizontal =
             Layout::horizontal([Constraint::Percentage(40), Constraint::Fill(1)]).spacing(1);
-        let [main_area, progress_area] = frame.area().layout(&vertical);
+        let [main_area, progress_area, key_bindings_area] = frame.area().layout(&vertical);
         let [tasks_area, details_area] = main_area.layout(&horizontal);
 
         self.render_tasks(frame, tasks_area);
         self.render_details(frame, details_area);
         self.render_progress(frame, progress_area);
+        self.render_key_bindings(frame, key_bindings_area);
     }
 
     fn render_tasks(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -76,7 +81,6 @@ impl App {
             task.description.white().italic().into(),
             "".into(),
             Line::from("MCP: ready for agents").cyan(),
-            "j/k or arrows: select • q: quit".dark_gray().into(),
         ])
         .block(panel(" Task details ").padding(Padding::horizontal(1)))
         .wrap(Wrap { trim: true });
@@ -91,6 +95,13 @@ impl App {
             .label(format!("{}: {}%", task.title, task.progress))
             .percent(task.progress);
         frame.render_widget(progress, area);
+    }
+
+    fn render_key_bindings(&self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(
+            Line::from("j/k or arrows: select • q: quit".dark_gray()).centered(),
+            area,
+        );
     }
 
     fn publish(&self, molerat: &mut Molerat) {
