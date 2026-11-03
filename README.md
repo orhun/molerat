@@ -97,11 +97,11 @@ See the [Ratatui migration guide](./RATATUI_MIGRATION.md) and [examples](./examp
 
 Here is [knife](https://github.com/bl4ckr0ss3/knife), a reverse-engineering TUI solving a crackme challenge using **molerat** + Codex:
 
-<video src="./assets/molerat-knife.mp4" alt="molerat knife demo">
+https://github.com/user-attachments/assets/586710de-214c-468c-91b7-0126d7a25592
 
 Here is [BugStalker](https://github.com/godzie44/BugStalker), a Rust debugger debugging an application using **molerat** + Codex:
 
-<video src="./assets/molerat-bugstalker.mp4" alt="molerat bugstalker demo">
+https://github.com/user-attachments/assets/ff256f9a-4f7b-4374-a7d3-5d91e2ebec55
 
 ## License
 
