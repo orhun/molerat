@@ -1,8 +1,17 @@
 [package]
 name = "molerat"
 description = "An accessibility & agentic layer for Rust UI applications 🦫"
-version = "0.1.0"
+version = "0.1.0-rc.0"
+authors = ["Orhun Parmaksız <orhunparmaksiz@gmail.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/orhun/molerat"
+repository = "https://github.com/orhun/molerat"
+documentation = "https://docs.rs/molerat"
+keywords = ["accessibility", "tui", "ratatui", "mcp", "agents"]
+categories = ["accessibility", "gui", "command-line-utilities"]
 edition = "2024"
+rust-version = "1.88.0"
 
 [features]
 default = []

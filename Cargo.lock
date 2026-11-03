@@ -1051,7 +1051,7 @@ dependencies = [
 
 [[package]]
 name = "molerat"
-version = "0.1.0"
+version = "0.1.0-rc.0"
 dependencies = [
  "accesskit",
  "accesskit_unix",
