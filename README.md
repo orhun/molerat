@@ -8,7 +8,7 @@ An accessibility & agentic layer for Rust UI applications 🦫
 cargo add molerat
 ```
 
-Add Molerat to your app and publish a semantic view alongside your existing UI:
+Add **molerat** to your app and publish a semantic view alongside your existing UI:
 
 ```rust
 use molerat::Molerat;
@@ -52,13 +52,13 @@ for message in molerat.messages() {
 
 Enable `mcp` feature to expose the UI to agents through MCP:
 
-```toml
+```bash
 cargo add molerat --features mcp
 ```
 
 MCP clients connect through the companion `molerat-mcp` stdio bridge. Install it with:
 
-```console
+```bash
 cargo install molerat --features mcp --bin molerat-mcp
 ```
 
@@ -77,7 +77,7 @@ let mut molerat = Molerat::<Message>::new_mcp("Notes")?;
 
 Enable `atspi` feature to expose the UI to agents through AT-SPI:
 
-```toml
+```bash
 cargo add molerat --features atspi
 ```
 
@@ -85,23 +85,23 @@ cargo add molerat --features atspi
 let mut molerat = Molerat::<Message>::new_atspi("Notes");
 ```
 
-Nothing else is needed! Molerat exposes your UI on the Unix accessibility bus; handle requested actions through `molerat.messages()`.
+Nothing else is needed! **molerat** exposes your UI on the Unix accessibility bus; handle requested actions through `molerat.messages()`.
 
 ## For Ratatui applications
 
-Molerat is not designed for any specific UI framework. However, it has first-class integration with [Ratatui](https://ratatui.rs/)!
+**molerat** is not designed for any specific UI framework. However, it has first-class integration with [Ratatui](https://ratatui.rs/)!
 
 See the [Ratatui migration guide](./RATATUI_MIGRATION.md) and [examples](./examples).
 
 ## Examples
 
-Here is [knife](https://github.com/bl4ckr0ss3/knife), a reverse-engineering TUI solving a crackme challenge using by Molerat + Codex:
+Here is [knife](https://github.com/bl4ckr0ss3/knife), a reverse-engineering TUI solving a crackme challenge using **molerat** + Codex:
 
-<video src="./assets/molerat-knife.mp4" alt="Molerat knife demo">
+<video src="./assets/molerat-knife.mp4" alt="molerat knife demo">
 
-Here is [BugStalker](https://github.com/godzie44/BugStalker), a Rust debugger debugging an application using Molerat + Codex:
+Here is [BugStalker](https://github.com/godzie44/BugStalker), a Rust debugger debugging an application using **molerat** + Codex:
 
-<video src="./assets/molerat-bugstalker.mp4" alt="Molerat bugstalker demo">
+<video src="./assets/molerat-bugstalker.mp4" alt="molerat bugstalker demo">
 
 ## License
 
