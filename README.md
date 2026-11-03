@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="assets/molerat-logo.png" width="250" alt="molerat logo">
+</p>
+
 # molerat
 
-An accessibility & agentic layer for Rust UI applications 🦫
+An accessibility & agentic layer for Rust UI applications, built on [AccessKit](https://github.com/AccessKit/accesskit) 🦫
 
 ## Quickstart
 
