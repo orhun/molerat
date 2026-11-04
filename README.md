@@ -109,7 +109,7 @@ https://github.com/user-attachments/assets/ff256f9a-4f7b-4374-a7d3-5d91e2ebec55
 
 ## License
 
-Licensed under either of [Apache License Version 2.0](./LICENSE-APACHE) or [The MIT License](./LICENSE-MIT) at your option 🐶
+Licensed under either of [Apache License Version 2.0](./LICENSE-APACHE) or [The MIT License](./LICENSE-MIT) at your option.
 
 🦀 ノ( º \_ º ノ) - respect crables!
 
