@@ -1,6 +1,6 @@
 [package]
 name = "molerat"
-description = "An accessibility & agentic layer for Rust UI applications 🦫"
+description = "An accessibility & agentic layer for Rust UI applications 🐀"
 version = "0.1.0-rc.0"
 authors = ["Orhun Parmaksız <orhunparmaksiz@gmail.com>"]
 license = "MIT OR Apache-2.0"
