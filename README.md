@@ -1,5 +1,12 @@
 <p align="center">
   <img src="assets/molerat-logo.png" width="250" alt="molerat logo">
+  <br><br>
+  <a href="https://github.com/orhun/molerat/releases"><img src="https://img.shields.io/github/v/release/orhun/molerat?include_prereleases&style=flat&labelColor=1C1C1D&color=E8AAA4&logo=github&logoColor=white" alt="GitHub release"></a>
+  <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20or%20Apache--2.0-E8AAA4?style=flat&labelColor=1C1C1D" alt="MIT or Apache-2.0 license"></a>
+  <br>
+  <a href="https://crates.io/crates/molerat"><img src="https://img.shields.io/crates/v/molerat?style=flat&labelColor=1C1C1D&color=E8AAA4&logo=Rust&logoColor=white" alt="Crate release"></a>
+  <a href="https://docs.rs/molerat"><img src="https://img.shields.io/docsrs/molerat?style=flat&labelColor=1C1C1D&color=E8AAA4&logo=docs.rs&logoColor=white" alt="Documentation"></a>
+  <a href="https://ratatui.rs"><img src="https://img.shields.io/badge/supports-ratatui-E8AAA4?logo=ratatui&logoColor=white&labelColor=1C1C1D&color=E8AAA4" alt="Supports Ratatui"></a>
 </p>
 
 # molerat
@@ -75,7 +82,7 @@ cargo run --example ratatui-recipe-mcp --features mcp
 The examples above are built with [Ratatui](https://ratatui.rs/), but **molerat** is not designed for any specific UI framework.
 
 > [!TIP]
-> If you want to integrate **molerat** with Ratatui, see the [migration guide](./RATATUI_MIGRATION.md) or simply give that document to your agent 🧀
+> If you want to integrate **molerat** with Ratatui, see the [migration guide](./RATATUI_MIGRATION.md) or simply give that document as a prompt to your agent 🧀
 
 ## Showcase
 
