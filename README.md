@@ -52,11 +52,7 @@ See the available semantic actions in the [API documentation](https://docs.rs/mo
 
 To handle the incoming actions:
 
-```rust
-# use molerat::Molerat;
-# enum Message { Save }
-# let mut molerat = Molerat::<Message>::new("Notes");
-
+```rust,ignore
 for message in molerat.messages() {
     match message {
         Message::Save => { /* update app state */ }
@@ -114,11 +110,7 @@ cargo add molerat --features atspi
 
 2. And then adjust your constructor to use AT-SPI:
 
-```rust
-use molerat::Molerat;
-
-enum Message {}
-
+```rust,ignore
 let mut molerat = Molerat::<Message>::new_atspi("Notes");
 ```
 
@@ -148,15 +140,8 @@ cargo add molerat --features mcp
 
 4. And then you can change your constructor to use the MCP bridge:
 
-```rust
-# fn main() -> std::io::Result<()> {
-use molerat::Molerat;
-
-enum Message {}
-
+```rust,ignore
 let mut molerat = Molerat::<Message>::new_mcp("Notes")?;
-# Ok(())
-# }
 ```
 
 That's it! Your app is now agentic and can be controlled by your favorite agent.
