@@ -13,6 +13,24 @@
 
 https://github.com/user-attachments/assets/0b7aeead-cbdf-4928-ace3-aa3feea08628
 
+<details>
+  <summary>Table of Contents</summary>
+
+<!-- vim-markdown-toc GFM -->
+
+- [Quickstart](#quickstart)
+- [Examples](#examples)
+- [Showcase](#showcase)
+- [Integrations](#integrations)
+  - [Screen readers](#screen-readers)
+  - [Agents](#agents)
+- [License](#license)
+- [Copyright](#copyright)
+
+<!-- vim-markdown-toc -->
+
+</details>
+
 ## Quickstart
 
 ```bash
