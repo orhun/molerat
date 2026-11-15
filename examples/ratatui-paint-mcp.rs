@@ -561,7 +561,7 @@ fn cycle<T: Copy + PartialEq, const N: usize>(selected: T, choices: [T; N], forw
     let index = choices
         .iter()
         .position(|choice| *choice == selected)
-        .map_or(0, |index| index);
+        .unwrap_or(0);
     let index = if forward {
         (index + 1) % N
     } else {

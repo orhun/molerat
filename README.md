@@ -24,7 +24,7 @@ Add **molerat** to your app and publish a semantic view alongside your existing 
 ```rust
 use molerat::Molerat;
 
-let mut molerat = Molerat::new("Notes");
+let mut molerat = Molerat::<()>::new("Notes");
 molerat.publish(|ui| {
     ui.text("status", "All changes saved");
 });
@@ -35,6 +35,8 @@ See the available semantic UI components in the [API documentation](https://docs
 If you have actions in your app, define an enum and return them from your UI handlers:
 
 ```rust
+use molerat::Molerat;
+
 #[derive(Debug)]
 enum Message {
     Save,
@@ -51,6 +53,10 @@ See the available semantic actions in the [API documentation](https://docs.rs/mo
 To handle the incoming actions:
 
 ```rust
+# use molerat::Molerat;
+# enum Message { Save }
+# let mut molerat = Molerat::<Message>::new("Notes");
+
 for message in molerat.messages() {
     match message {
         Message::Save => { /* update app state */ }
@@ -109,6 +115,10 @@ cargo add molerat --features atspi
 2. And then adjust your constructor to use AT-SPI:
 
 ```rust
+use molerat::Molerat;
+
+enum Message {}
+
 let mut molerat = Molerat::<Message>::new_atspi("Notes");
 ```
 
@@ -139,7 +149,14 @@ cargo add molerat --features mcp
 4. And then you can change your constructor to use the MCP bridge:
 
 ```rust
+# fn main() -> std::io::Result<()> {
+use molerat::Molerat;
+
+enum Message {}
+
 let mut molerat = Molerat::<Message>::new_mcp("Notes")?;
+# Ok(())
+# }
 ```
 
 That's it! Your app is now agentic and can be controlled by your favorite agent.
