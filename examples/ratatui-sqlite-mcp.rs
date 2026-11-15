@@ -132,7 +132,7 @@ impl App {
         let selected_table = tables
             .iter()
             .position(|table| table.name == "services")
-            .map_or(0, |index| index);
+            .unwrap_or(0);
         let mut app = Self {
             connection,
             editor: sql_editor("SELECT * FROM services;", true),
@@ -652,7 +652,7 @@ impl App {
             read_schema(&self.connection).map_err(|error| error.to_string())?;
         self.selected_table = selected
             .and_then(|selected| tables.iter().position(|table| table.name == selected))
-            .map_or(0, |index| index);
+            .unwrap_or(0);
         self.tables = tables;
         self.relations = relations;
         Ok(())
