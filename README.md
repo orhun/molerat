@@ -60,6 +60,10 @@ for message in molerat.messages() {
 }
 ```
 
+Here is how your semantic tree and actions will look in [Accerciser](https://wiki.gnome.org/Accessibility/TestingTools/Accerciser):
+
+<img src="assets/accerciser.png" width="500">
+
 ## Examples
 
 - [`ratatui-recipe-atspi`](./examples/ratatui-recipe-atspi.rs): An app that speaks Ratatouille recipe.
