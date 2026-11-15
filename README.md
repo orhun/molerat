@@ -9,6 +9,8 @@
   <a href="https://ratatui.rs"><img src="https://img.shields.io/badge/supports-ratatui-E8AAA4?logo=ratatui&logoColor=white&labelColor=1C1C1D&color=E8AAA4" alt="Supports Ratatui"></a>
 </p>
 
+<video src="https://github.com/user-attachments/assets/bb39f4cf-8676-4e44-abdd-cb18023c83fb" alt="molerat demo">
+
 # molerat
 
 An accessibility & agentic layer for Rust UI applications, built on [AccessKit](https://github.com/AccessKit/accesskit) 🐀
@@ -71,6 +73,7 @@ Here is how your semantic tree and actions will look in [Accerciser](https://wik
 - [`ratatui-recipe-mcp`](./examples/ratatui-recipe-mcp.rs): Task queue controlled by agents.
 - [`ratatui-sqlite-mcp`](./examples/ratatui-sqlite-mcp.rs): SQLite workbench controlled by agents.
 - [`ratatui-paint-mcp`](./examples/ratatui-paint-mcp.rs): Drawing canvas controlled by agents.
+- [`ratatui-showcase`](./examples/ratatui-showcase.rs): The demo content shown in the video above.
 
 Run one with:
 

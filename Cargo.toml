@@ -69,3 +69,7 @@ required-features = ["mcp"]
 [[example]]
 name = "ratatui-paint-mcp"
 required-features = ["mcp"]
+
+[[example]]
+name = "ratatui-showcase"
+required-features = ["atspi", "mcp"]
