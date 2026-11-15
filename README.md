@@ -7,9 +7,8 @@
   <a href="https://crates.io/crates/molerat"><img src="https://img.shields.io/crates/v/molerat?style=flat&labelColor=1C1C1D&color=E8AAA4&logo=Rust&logoColor=white" alt="Crate release"></a>
   <a href="https://docs.rs/molerat"><img src="https://img.shields.io/docsrs/molerat?style=flat&labelColor=1C1C1D&color=E8AAA4&logo=docs.rs&logoColor=white" alt="Documentation"></a>
   <a href="https://ratatui.rs"><img src="https://img.shields.io/badge/supports-ratatui-E8AAA4?logo=ratatui&logoColor=white&labelColor=1C1C1D&color=E8AAA4" alt="Supports Ratatui"></a>
+  <video src="https://github.com/user-attachments/assets/9b310cea-6099-4109-b94c-46978af8cc9e" alt="molerat demo">
 </p>
-
-<video src="https://github.com/user-attachments/assets/bb39f4cf-8676-4e44-abdd-cb18023c83fb" alt="molerat demo">
 
 # molerat
 
